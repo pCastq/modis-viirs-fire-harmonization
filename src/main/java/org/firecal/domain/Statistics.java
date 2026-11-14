@@ -94,6 +94,47 @@ public final class Statistics {
   }
 
   /**
+   * Coefficiente di correlazione di Pearson fra due serie della stessa lunghezza.
+   *
+   * <p>Attenzione: <b>non vede la scala</b>. {@code y = 10 x} ha correlazione 1 anche se i valori
+   * sono dieci volte piu' grandi: per giudicare un metodo servono anche errore e bias.
+   *
+   * @return la correlazione in [-1, 1]; vuota con meno di due punti o se una serie e' costante
+   *     (non definita)
+   * @throws IllegalArgumentException se le lunghezze differiscono o un valore non e' finito
+   */
+  public static OptionalDouble pearson(double[] x, double[] y) {
+    if (x.length != y.length) {
+      throw new IllegalArgumentException("Le serie hanno lunghezze diverse");
+    }
+    int n = x.length;
+    for (int i = 0; i < n; i++) {
+      requireFinite(x[i]);
+      requireFinite(y[i]);
+    }
+    if (n < 2) {
+      return OptionalDouble.empty();
+    }
+    double meanX = Arrays.stream(x).sum() / n;
+    double meanY = Arrays.stream(y).sum() / n;
+    double sxx = 0;
+    double syy = 0;
+    double sxy = 0;
+    for (int i = 0; i < n; i++) {
+      double dx = x[i] - meanX;
+      double dy = y[i] - meanY;
+      sxx += dx * dx;
+      syy += dy * dy;
+      sxy += dx * dy;
+    }
+    if (sxx == 0 || syy == 0) {
+      return OptionalDouble.empty();
+    }
+    double r = sxy / Math.sqrt(sxx * syy);
+    return OptionalDouble.of(Math.max(-1.0, Math.min(1.0, r)));
+  }
+
+  /**
    * Funzione di ripartizione della normale standard, in doppia precisione (algoritmo di Hart
    * come descritto da West, 2005). Serve al p-value di Mann-Kendall. Nelle code restituisce il
    * valore con buon errore relativo, per questo il p-value si calcola come {@code
