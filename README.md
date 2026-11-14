@@ -12,8 +12,20 @@ MODIS and VIIRS Hot Spots"). Decisioni, dubbi e cose da verificare con i dati re
 ## Test
 
 ```bash
-./mvnw test
+./mvnw test      # test di unita' (*Test): veloci, senza Docker
+./mvnw verify    # in piu' i test di integrazione (*IT): richiedono Docker acceso (Testcontainers)
 ```
+
+## Avvio dell'applicazione
+
+Con il database acceso (vedi sotto), l'applicazione applica da sola le migrazioni Flyway all'avvio:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Controllo di salute: `http://localhost:8080/actuator/health`. Le migrazioni stanno in
+`src/main/resources/db/migration` (`V1__...`, `V2__...`).
 
 ## Database di sviluppo (PostgreSQL 16 + PostGIS 3.4)
 
