@@ -1,0 +1,9 @@
+target/
+.idea/
+.claude/
+*.iml
+.vscode/
+.DS_Store
+
+# Dati FIRMS scaricati a mano: grandi e riproducibili, non vanno nel repository
+data/
