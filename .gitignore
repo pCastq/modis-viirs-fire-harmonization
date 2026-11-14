@@ -1,6 +1,9 @@
 target/
 .idea/
 .claude/
+
+# Variabili locali (password del database, porte): non si versionano
+.env
 *.iml
 .vscode/
 .DS_Store

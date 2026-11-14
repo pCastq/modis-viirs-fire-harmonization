@@ -1,0 +1,36 @@
+# Database di sviluppo: PostgreSQL 16 + PostGIS 3.4 (specifica, sezione 6.1).
+#
+# Avvio:    docker compose up -d db
+# Stato:    docker compose ps        (attendere "healthy")
+# Stop:     docker compose down      (i dati restano nel volume)
+# Azzera:   docker compose down -v   (CANCELLA tutti i dati del database)
+#
+# Le credenziali sono SOLO per lo sviluppo locale. Si possono cambiare con variabili d'ambiente
+# o con un file .env (non versionato), per esempio FIRECAL_DB_PASSWORD.
+
+# Nome fisso del progetto: senza, Compose usa il nome della cartella e lo stesso file lanciato da due
+# cartelle diverse (per esempio un worktree e il checkout principale) creerebbe due database separati.
+name: firecal
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: firecal-db
+    environment:
+      POSTGRES_DB: ${FIRECAL_DB_NAME:-firecal}
+      POSTGRES_USER: ${FIRECAL_DB_USER:-firecal}
+      POSTGRES_PASSWORD: ${FIRECAL_DB_PASSWORD:-firecal}
+    ports:
+      # Solo su localhost (la password di sviluppo e' debole) e sulla 5433, per non
+      # entrare in conflitto con un PostgreSQL gia' installato sulla 5432.
+      - "127.0.0.1:${FIRECAL_DB_PORT:-5433}:5432"
+    volumes:
+      - firecal-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  firecal-pgdata:
