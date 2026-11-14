@@ -93,6 +93,46 @@ public final class Statistics {
     return (below + equal / 2.0) / reference.length * 100.0;
   }
 
+  /**
+   * Funzione di ripartizione della normale standard, in doppia precisione (algoritmo di Hart
+   * come descritto da West, 2005). Serve al p-value di Mann-Kendall. Nelle code restituisce il
+   * valore con buon errore relativo, per questo il p-value si calcola come {@code
+   * 2 * normalCdf(-|z|)}.
+   */
+  static double normalCdf(double x) {
+    double abs = Math.abs(x);
+    double tail; // P(Z > |x|)
+    if (abs > 37) {
+      tail = 0;
+    } else {
+      double exponential = Math.exp(-abs * abs / 2);
+      if (abs < 7.07106781186547) {
+        double num = 3.52624965998911e-02 * abs + 0.700383064443688;
+        num = num * abs + 6.37396220353165;
+        num = num * abs + 33.912866078383;
+        num = num * abs + 112.079291497871;
+        num = num * abs + 221.213596169931;
+        num = num * abs + 220.206867912376;
+        double den = 8.83883476483184e-02 * abs + 1.75566716318264;
+        den = den * abs + 16.064177579207;
+        den = den * abs + 86.7807322029461;
+        den = den * abs + 296.564248779674;
+        den = den * abs + 637.333633378831;
+        den = den * abs + 793.826512519948;
+        den = den * abs + 440.413735824752;
+        tail = exponential * num / den;
+      } else {
+        double build = abs + 0.65;
+        build = abs + 4 / build;
+        build = abs + 3 / build;
+        build = abs + 2 / build;
+        build = abs + 1 / build;
+        tail = exponential / build / 2.506628274631;
+      }
+    }
+    return x > 0 ? 1 - tail : tail;
+  }
+
   private static double[] sortedCopy(double[] values) {
     if (values.length == 0) {
       throw new IllegalArgumentException("Serie vuota");
