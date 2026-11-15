@@ -50,12 +50,13 @@ public class DataInfoService {
         YearMonth.from(((java.sql.Date) row.get("first")).toLocalDate()), YearMonth.from(((java.sql.Date) row.get("last")).toLocalDate()));
   }
 
-  /** Cambia quando cambiano i dati o il metodo attivo: base dell'ETag (specifica 6.4). */
+  /** Cambia quando cambiano i dati, il metodo attivo o la sua calibrazione: base dell'ETag (specifica 6.4). */
   public String dataVersion() {
     String method = jdbc.queryForObject("SELECT value FROM app_setting WHERE name = 'active_method'", String.class);
     Long lastRun = jdbc.queryForObject("SELECT coalesce(max(id), 0) FROM ingest_run WHERE status = 'OK'", Long.class);
     Long coverage = jdbc.queryForObject("SELECT count(*) FROM observation_day", Long.class);
-    return method + "|" + lastRun + "|" + coverage;
+    String calibration = jdbc.queryForList("SELECT built_at::text FROM calib_info", String.class).stream().findFirst().orElse("-");
+    return method + "|" + lastRun + "|" + coverage + "|" + calibration;
   }
 
   /** ETag di una risposta: dipende dalla versione dei dati, dalla richiesta e dalla lingua (i testi cambiano). */

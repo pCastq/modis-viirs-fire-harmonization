@@ -15,7 +15,7 @@ import org.firecal.domain.Satellite;
 import org.firecal.domain.SourceTypeFilter;
 import org.junit.jupiter.api.Test;
 
-class CountryMonthKMethodTest {
+class CountryKMethodTest {
 
   private static final int COUNTER =
       CellDayFlags.counterIndex(SourceTypeFilter.VEGETATION, DayNightFilter.ANY, ConfidenceClass.NOMINAL);
@@ -32,8 +32,8 @@ class CountryMonthKMethodTest {
         .build();
   }
 
-  private static CountryMonthKMethod method(Map<String, Double> scale) {
-    return new CountryMonthKMethod("1", table(), 25, scale);
+  private static CountryKMethod method(Map<String, Double> scale) {
+    return new CountryKMethod("1", KResolution.MONTH, table(), 25, scale);
   }
 
   private static CellMonthContext country(String name, YearMonth month) {
@@ -58,7 +58,7 @@ class CountryMonthKMethodTest {
 
   @Test
   void theKChangesWithTheMonthAndTheCountry() {
-    CountryMonthKMethod m = method(Map.of());
+    CountryKMethod m = method(Map.of());
     assertThat(m.harmonize(country("Argentina", YearMonth.of(2019, 1)), counts(Satellite.TERRA, 100, Satellite.AQUA, 100)).orElseThrow().value())
         .isCloseTo(1000.0, offset(1e-9)); // k = 5
     assertThat(m.harmonize(country("Italy", AUG_2019), counts(Satellite.TERRA, 50, Satellite.AQUA, 50)).orElseThrow().value())
@@ -67,7 +67,7 @@ class CountryMonthKMethodTest {
 
   @Test
   void aloneTerraOrAquaUsesItsOwnK() {
-    CountryMonthKMethod m = method(Map.of());
+    CountryKMethod m = method(Map.of());
     assertThat(m.harmonize(country("Argentina", AUG_2019), counts(Satellite.AQUA, 70)).orElseThrow().value()).isCloseTo(70 * 3000.0 / 700, offset(1e-9));
     assertThat(m.harmonize(country("Argentina", AUG_2019), counts(Satellite.TERRA, 30)).orElseThrow().value()).isCloseTo(30 * 10.0, offset(1e-9));
   }
@@ -105,28 +105,31 @@ class CountryMonthKMethodTest {
 
   @Test
   void theUncertaintyFollowsTheCountLevel() {
-    CountryMonthKMethod m = method(Map.of());
+    CountryKMethod m = method(Map.of());
     double high = m.harmonize(country("Argentina", AUG_2019), counts(Satellite.TERRA, 1200, Satellite.AQUA, 800)).orElseThrow().relativeUncertainty().orElseThrow();
     double mid = m.harmonize(country("Argentina", AUG_2019), counts(Satellite.TERRA, 150, Satellite.AQUA, 100)).orElseThrow().relativeUncertainty().orElseThrow();
     double low = m.harmonize(country("Argentina", AUG_2019), counts(Satellite.TERRA, 10, Satellite.AQUA, 10)).orElseThrow().relativeUncertainty().orElseThrow();
-    assertThat(high).isEqualTo(0.14);
-    assertThat(mid).isEqualTo(0.30);
-    assertThat(low).isEqualTo(0.58);
+    assertThat(high).isEqualTo(UncertaintyBands.country(KResolution.MONTH, 2000));
+    assertThat(mid).isEqualTo(UncertaintyBands.country(KResolution.MONTH, 250));
+    assertThat(low).isEqualTo(UncertaintyBands.country(KResolution.MONTH, 20));
+    assertThat(high).isLessThan(mid);
+    assertThat(mid).isLessThan(low);
   }
 
   @Test
   void beforeViirsAnExtraStructuralUncertaintyIsAdded() {
-    CountryMonthKMethod m = method(Map.of());
+    CountryKMethod m = method(Map.of());
     SatelliteCounts c = counts(Satellite.TERRA, 1200, Satellite.AQUA, 800);
     double past = m.harmonize(country("Argentina", YearMonth.of(2005, 8)), c).orElseThrow().relativeUncertainty().orElseThrow();
-    assertThat(past).isCloseTo(Math.sqrt(0.14 * 0.14 + 0.10 * 0.10), offset(1e-9));
+    double band = UncertaintyBands.country(KResolution.MONTH, 2000);
+    assertThat(past).isCloseTo(Math.sqrt(band * band + 0.10 * 0.10), offset(1e-9));
   }
 
   @Test
   void aCountryScaleWidensTheBand() {
-    CountryMonthKMethod m = method(Map.of("Italy", 2.0));
+    CountryKMethod m = method(Map.of("Italy", 2.0));
     double italy = m.harmonize(country("Italy", AUG_2019), counts(Satellite.TERRA, 600, Satellite.AQUA, 600)).orElseThrow().relativeUncertainty().orElseThrow();
-    assertThat(italy).isCloseTo(0.28, offset(1e-9)); // 0,14 x 2
+    assertThat(italy).isCloseTo(2.0 * UncertaintyBands.country(KResolution.MONTH, 1200), offset(1e-9));
   }
 
   @Test
@@ -146,7 +149,7 @@ class CountryMonthKMethodTest {
 
   @Test
   void withoutAnyCalibrationTheRawCountIsKeptAndDeclaredUncertain() {
-    CountryMonthKMethod empty = new CountryMonthKMethod("1", CalibrationTable.builder().build(), 25, Map.of());
+    CountryKMethod empty = new CountryKMethod("1", KResolution.MONTH, CalibrationTable.builder().build(), 25, Map.of());
     HarmonizedValue v = empty.harmonize(country("Argentina", AUG_2019), counts(Satellite.AQUA, 100)).orElseThrow();
     assertThat(v.value()).isEqualTo(100.0);
     assertThat(v.relativeUncertainty().orElseThrow()).isEqualTo(1.5);
@@ -164,7 +167,7 @@ class CountryMonthKMethodTest {
         .blockCountry(-1, -1, "Argentina")
         .blockCountry(-1, -2, "Argentina")
         .build();
-    CountryMonthKMethod m = new CountryMonthKMethod("1", t, 25, Map.of());
+    CountryKMethod m = new CountryKMethod("1", KResolution.MONTH, t, 25, Map.of());
     CellMonthContext rich = new CellMonthContext(new CellId(-100, -100), AUG_2019, DayNightFilter.ANY, ConfidenceClass.NOMINAL, SourceTypeFilter.VEGETATION, null);
     CellMonthContext poor = new CellMonthContext(new CellId(-100, -300), AUG_2019, DayNightFilter.ANY, ConfidenceClass.NOMINAL, SourceTypeFilter.VEGETATION, null);
     SatelliteCounts c = counts(Satellite.TERRA, 20, Satellite.AQUA, 20);
@@ -180,7 +183,7 @@ class CountryMonthKMethodTest {
         .blockCountry(-1, -1, "Argentina")
         .build();
     CellMonthContext ctx = new CellMonthContext(new CellId(-100, -100), AUG_2019, DayNightFilter.ANY, ConfidenceClass.NOMINAL, SourceTypeFilter.VEGETATION, null);
-    assertThat(new CountryMonthKMethod("1", t, 25, Map.of()).harmonize(ctx, counts(Satellite.TERRA, 10, Satellite.AQUA, 10)).orElseThrow().value())
+    assertThat(new CountryKMethod("1", KResolution.MONTH, t, 25, Map.of()).harmonize(ctx, counts(Satellite.TERRA, 10, Satellite.AQUA, 10)).orElseThrow().value())
         .isCloseTo(60.0, offset(1e-9));
   }
 
@@ -189,7 +192,7 @@ class CountryMonthKMethodTest {
     CalibrationTable t = CalibrationTable.builder()
         .countryMonth("Argentina", 8, SatelliteGroup.TERRA_AQUA, COUNTER, 3000, 1000).blockCountry(0, 0, "Argentina").build();
     CellMonthContext ctx = new CellMonthContext(new CellId(0, 0), AUG_2019, DayNightFilter.ANY, ConfidenceClass.NOMINAL, SourceTypeFilter.VEGETATION, null);
-    double block = new CountryMonthKMethod("1", t, 25, Map.of()).harmonize(ctx, counts(Satellite.TERRA, 150, Satellite.AQUA, 100)).orElseThrow().relativeUncertainty().orElseThrow();
+    double block = new CountryKMethod("1", KResolution.MONTH, t, 25, Map.of()).harmonize(ctx, counts(Satellite.TERRA, 150, Satellite.AQUA, 100)).orElseThrow().relativeUncertainty().orElseThrow();
     assertThat(block).isEqualTo(0.28);
   }
 
@@ -197,7 +200,7 @@ class CountryMonthKMethodTest {
 
   @Test
   void rejectsInvalidConstruction() {
-    assertThatThrownBy(() -> new CountryMonthKMethod("1", table(), 0, Map.of())).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new CountryKMethod("1", KResolution.MONTH, table(), 0, Map.of())).isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> CalibrationTable.builder().countryMonth("X", 13, SatelliteGroup.AQUA, 0, 1, 1)).isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new Stratum(-1, 0)).isInstanceOf(IllegalArgumentException.class);
   }

@@ -14,6 +14,7 @@ import java.util.Map;
 import org.firecal.domain.CellDayFlags;
 import org.firecal.domain.Satellite;
 import org.firecal.domain.harmonization.SatelliteGroup;
+import org.firecal.jdbc.SqlArrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,13 +22,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Calcola le somme di calibrazione del metodo {@code country-month-k} dagli aggregati gia' costruiti
+ * Calcola le somme di calibrazione del metodo {@code country-k} (per trimestre o per mese) dagli aggregati gia' costruiti
  * ({@code boundary_month} per i paesi, {@code cell_month_01} per i blocchi) e le scrive in {@code calib_*}.
  *
  * <p>Per ogni gruppo di satelliti vecchi (Terra, Aqua, Terra+Aqua) si usano solo i mesi della finestra in cui sia
  * S-NPP sia il gruppo sono "inclusi" dalle regole di copertura (almeno l'80% dei giorni OK) e il mese e' completo: un mese con
- * un satellite a meta' trasmissione falserebbe k. Finestra consigliata: 2013-2021 (il 2012 e' incompleto, dopo il 2021 Terra e Aqua
- * derivano: docs/ANALISI_ARMONIZZAZIONE.md, sezione 3.4).
+ * un satellite a meta' trasmissione falserebbe k. Finestra predefinita: 2012-2018 (il 2012 incompleto
+ * esce da solo, perche' il mese non e' completo); la prova si fa sul periodo successivo (docs/ARMONIZZAZIONE_PAESE_TRIMESTRE.md).
  */
 @Service
 public class HarmonizationCalibrator {
@@ -176,7 +177,7 @@ public class HarmonizationCalibrator {
     Map<String, Map<Satellite, long[]>> rows = new HashMap<>();
     jdbc.query("SELECT code, satellite, counts FROM boundary_month WHERE month = ?", rs -> {
       Satellite s = Satellite.values()[rs.getInt("satellite") - 1];
-      rows.computeIfAbsent(rs.getString("code"), k -> new EnumMap<>(Satellite.class)).put(s, toLongs(rs.getArray("counts")));
+      rows.computeIfAbsent(rs.getString("code"), k -> new EnumMap<>(Satellite.class)).put(s, SqlArrays.toLongs(rs.getArray("counts")));
     }, Date.valueOf(month.atDay(1)));
     return rows;
   }
@@ -216,14 +217,6 @@ public class HarmonizationCalibrator {
     }
   }
 
-  private static long[] toLongs(Array array) throws SQLException {
-    Object[] values = (Object[]) array.getArray();
-    long[] out = new long[values.length];
-    for (int i = 0; i < values.length; i++) {
-      out[i] = ((Number) values[i]).longValue();
-    }
-    return out;
-  }
 
   private static Array bigints(Connection con, long[] values) throws SQLException {
     Long[] boxed = new Long[values.length];
