@@ -4,6 +4,10 @@ A web app that turns 25 years of satellite fire detections into **one comparable
 drawn area. Built at the NASA Space Apps Challenge 2026, challenge
 [*Harmonization of MODIS and VIIRS Hot Spots*](https://www.spaceappschallenge.org/2026/challenges/modis-and-viirs-hot-spots/).
 
+#### Small video demo :
+https://youtu.be/mTP2QidIHGw
+
+
 ## The problem
 
 MODIS (Terra, Aqua; 1 km pixels, since 2000) is being replaced by VIIRS (S-NPP, NOAA-20, NOAA-21; 375 m pixels, since 2012). VIIRS sees
