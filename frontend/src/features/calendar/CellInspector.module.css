@@ -1,0 +1,47 @@
+.inspector,
+.hint {
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 0.88rem;
+}
+
+.hint {
+  color: var(--text-muted);
+}
+
+.title {
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.flag {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.sat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sat i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}

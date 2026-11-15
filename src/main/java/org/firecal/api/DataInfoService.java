@@ -1,5 +1,6 @@
 package org.firecal.api;
 
+import org.springframework.context.i18n.LocaleContextHolder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -13,11 +14,21 @@ import org.springframework.stereotype.Service;
 public class DataInfoService {
 
   /** Non c'e' ancora nessun dato caricato: l'API non puo' rispondere a un calendario. */
-  public static class NoDataException extends RuntimeException {
+  public static class NoDataException extends RuntimeException implements org.firecal.query.Localizable {
     private static final long serialVersionUID = 1L;
 
     public NoDataException() {
-      super("Nessun dato caricato: eseguire il caricamento e la ricostruzione degli aggregati");
+      super("data.none");
+    }
+
+    @Override
+    public String messageCode() {
+      return "data.none";
+    }
+
+    @Override
+    public Object[] messageArgs() {
+      return new Object[0];
     }
   }
 
@@ -47,11 +58,11 @@ public class DataInfoService {
     return method + "|" + lastRun + "|" + coverage;
   }
 
-  /** ETag di una risposta: dipende dalla versione dei dati e dalla richiesta. */
+  /** ETag di una risposta: dipende dalla versione dei dati, dalla richiesta e dalla lingua (i testi cambiano). */
   public String etag(Object request) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] hash = digest.digest((dataVersion() + "#" + request).getBytes(StandardCharsets.UTF_8));
+      byte[] hash = digest.digest((dataVersion() + "#" + LocaleContextHolder.getLocale().getLanguage() + "#" + request).getBytes(StandardCharsets.UTF_8));
       return "\"" + HexFormat.of().formatHex(hash, 0, 12) + "\"";
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException(e);

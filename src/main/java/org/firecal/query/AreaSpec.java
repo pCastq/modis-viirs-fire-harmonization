@@ -10,7 +10,7 @@ public record AreaSpec(String country, String geoJson) {
     boolean hasCountry = country != null && !country.isBlank();
     boolean hasGeometry = geoJson != null && !geoJson.isBlank();
     if (hasCountry == hasGeometry) {
-      throw new IllegalArgumentException("Indicare un paese oppure una geometria, non entrambi e non nessuno");
+      throw new InvalidRequestException("request.areaExactlyOne");
     }
   }
 

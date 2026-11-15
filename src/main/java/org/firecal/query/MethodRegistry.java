@@ -53,7 +53,7 @@ public class MethodRegistry {
   public HarmonizationMethod resolve(String activeMethod) {
     HarmonizationMethod method = methods.get(activeMethod);
     if (method == null) {
-      throw new IllegalArgumentException("Metodo di armonizzazione sconosciuto: " + activeMethod + " (disponibili: " + methods.keySet() + ")");
+      throw new InvalidRequestException("method.unknown", activeMethod, methods.keySet());
     }
     return method;
   }

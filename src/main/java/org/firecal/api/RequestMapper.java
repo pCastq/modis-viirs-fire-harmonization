@@ -9,6 +9,7 @@ import org.firecal.domain.DayNightFilter;
 import org.firecal.domain.SourceTypeFilter;
 import org.firecal.query.AreaSpec;
 import org.firecal.query.CalendarService;
+import org.firecal.query.InvalidRequestException;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
@@ -36,7 +37,7 @@ public class RequestMapper {
     boolean hasCode = r.boundaryCode() != null && !r.boundaryCode().isBlank();
     boolean hasGeometry = r.geometry() != null && !r.geometry().isEmpty();
     if (hasCode == hasGeometry) {
-      throw new IllegalArgumentException("Indicare boundaryCode oppure geometry, non entrambi e non nessuno");
+      throw new InvalidRequestException("request.areaExactlyOne");
     }
     if (hasCode) {
       return AreaSpec.ofCountry(r.boundaryCode().strip());
@@ -44,7 +45,7 @@ public class RequestMapper {
     try {
       return AreaSpec.ofGeometry(json.writeValueAsString(r.geometry()));
     } catch (JacksonException e) {
-      throw new IllegalArgumentException("geometry non e' un GeoJSON valido");
+      throw new InvalidRequestException("request.geometryInvalid");
     }
   }
 
@@ -55,18 +56,18 @@ public class RequestMapper {
     try {
       return YearMonth.parse(text.strip());
     } catch (DateTimeParseException e) {
-      throw new IllegalArgumentException("Formato non valido per " + field + " (atteso AAAA-MM): " + text);
+      throw new InvalidRequestException("request.monthFormat", field, text);
     }
   }
 
   public LocalDate date(String text) {
     if (text == null || text.isBlank()) {
-      throw new IllegalArgumentException("Manca il campo date (AAAA-MM-GG)");
+      throw new InvalidRequestException("request.dateMissing");
     }
     try {
       return LocalDate.parse(text.strip());
     } catch (DateTimeParseException e) {
-      throw new IllegalArgumentException("Formato non valido per date (atteso AAAA-MM-GG): " + text);
+      throw new InvalidRequestException("request.dateFormat", text);
     }
   }
 
@@ -82,7 +83,7 @@ public class RequestMapper {
       case "ANY" -> DayNightFilter.ANY;
       case "D", "DAY" -> DayNightFilter.DAY;
       case "N", "NIGHT" -> DayNightFilter.NIGHT;
-      default -> throw new IllegalArgumentException("Valore non valido per dayNight (ANY, D o N): " + text);
+      default -> throw new InvalidRequestException("request.dayNightInvalid", text);
     };
   }
 
@@ -94,7 +95,7 @@ public class RequestMapper {
       case "ALL", "LOW" -> ConfidenceClass.LOW;
       case "NOMINAL" -> ConfidenceClass.NOMINAL;
       case "HIGH" -> ConfidenceClass.HIGH;
-      default -> throw new IllegalArgumentException("Valore non valido per minConfidence (ALL, NOMINAL o HIGH): " + text);
+      default -> throw new InvalidRequestException("request.confidenceInvalid", text);
     };
   }
 
@@ -106,10 +107,10 @@ public class RequestMapper {
   /** Mese di anomalia o dettaglio: {@code year} e {@code month} obbligatori. */
   public YearMonth targetMonth(AreaRequest r) {
     if (r.year() == null || r.month() == null) {
-      throw new IllegalArgumentException("Servono year e month");
+      throw new InvalidRequestException("request.yearMonthRequired");
     }
     if (r.month() < 1 || r.month() > 12) {
-      throw new IllegalArgumentException("month deve essere tra 1 e 12: " + r.month());
+      throw new InvalidRequestException("request.monthRange", r.month());
     }
     return YearMonth.of(r.year(), r.month());
   }
@@ -119,7 +120,7 @@ public class RequestMapper {
     YearMonth from = month(r.from(), dataFrom, "from");
     YearMonth to = month(r.to(), dataTo, "to");
     if (from.isAfter(to)) {
-      throw new IllegalArgumentException("Periodo invertito: from " + from + " e' dopo to " + to);
+      throw new InvalidRequestException("request.periodInverted", from, to);
     }
     return new CalendarService.CalendarQuery(area(r), from, to, sourceType(r.sourceType()), dayNight(r.dayNight()), minConfidence(r.minConfidence()));
   }
@@ -128,7 +129,7 @@ public class RequestMapper {
     try {
       return Enum.valueOf(type, text.strip().toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
-      throw new IllegalArgumentException("Valore non valido per " + field + ": " + text);
+      throw new InvalidRequestException("request.valueInvalid", field, text);
     }
   }
 }

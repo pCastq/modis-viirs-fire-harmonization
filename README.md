@@ -63,3 +63,22 @@ Avvio: `./mvnw spring-boot:run` (porta 8080). Documentazione interattiva: `/swag
 Endpoint principali (tutti sotto `/api/v1`): `POST calendar`, `anomaly`, `seasonal-profile`, `annual-trend`, `month-detail`, `hotspots`, `export/hotspots.csv`, `export/monthly.csv`; `GET metadata`, `boundaries`.
 Esempio: `curl -H "Content-Type: application/json" -d '{"boundaryCode":"Italy"}' localhost:8080/api/v1/calendar`
 Il metodo di armonizzazione attivo e' in `app_setting.active_method` (oggi `fixed-factor@1`, provvisorio).
+
+## Lingue dell'API
+
+Note, errori e motivi (`notes`, `title`/`detail` dei Problem Details, `reason` dell'anomalia) escono nella lingua di
+`Accept-Language`: **inglese** (predefinito) o **italiano**; qualunque altra lingua, o nessun header, dà inglese
+(mai la lingua del server). I numeri e i codici non cambiano. I testi stanno in `src/main/resources/messages/`
+(`api.properties` = inglese, `api_it.properties`); `ApiMessagesTest` verifica che abbiano le stesse chiavi e gli stessi
+segnaposto. L'ETag dipende dalla lingua. Per aggiungere una lingua: un file `api_<codice>.properties` e il codice in
+`ApiConfig.SUPPORTED_LOCALES`.
+
+## Front-end (dashboard)
+
+La dashboard React + Vite sta in `frontend/` (vedi `frontend/README.md`): calendario anni x mesi, anomalia, profilo
+stagionale, tendenza, dettaglio giornaliero con mappa e export CSV, con area scelta da elenco, disegno o coordinate.
+
+```bash
+./mvnw spring-boot:run          # backend su :8080
+cd frontend && npm install && npm run dev   # dashboard su http://localhost:5173
+```

@@ -1,0 +1,48 @@
+.anomaly {
+  display: grid;
+  gap: 10px;
+}
+
+.headline {
+  font-size: 1.05rem;
+}
+
+.veryHigh,
+.high {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.veryLow,
+.low {
+  color: var(--cool);
+  font-weight: 700;
+}
+
+.typical {
+  font-weight: 700;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+
+.facts dt {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}

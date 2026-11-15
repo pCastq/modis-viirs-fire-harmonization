@@ -152,7 +152,7 @@ class ApiIT {
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\"}"))
         .andExpect(jsonPath("$.method.id").value("fixed-factor"))
         .andExpect(jsonPath("$.typicalUncertainty").value(org.hamcrest.Matchers.closeTo(0.35, 1e-9)))
-        .andExpect(jsonPath("$.notes[0]").value(org.hamcrest.Matchers.containsString("PROVVISORIO")));
+        .andExpect(jsonPath("$.notes[0]").value(org.hamcrest.Matchers.containsString("PROVISIONAL")));
   }
 
   // ---- anomalia, profilo, trend ----
@@ -162,17 +162,17 @@ class ApiIT {
     mvc.perform(post("/api/v1/anomaly").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"year\":2019,\"month\":1}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.available").value(false))
-        .andExpect(jsonPath("$.reason").value(org.hamcrest.Matchers.containsString("nessun anno di riferimento")));
+        .andExpect(jsonPath("$.reason").value(org.hamcrest.Matchers.containsString("no reference year")));
     mvc.perform(post("/api/v1/anomaly").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"year\":2015,\"month\":6}"))
         .andExpect(jsonPath("$.available").value(false))
-        .andExpect(jsonPath("$.reason").value(org.hamcrest.Matchers.containsString("nessun dato")));
+        .andExpect(jsonPath("$.reason").value(org.hamcrest.Matchers.containsString("no data for the requested month")));
   }
 
   @Test
   void anomalyNeedsYearAndMonth() throws Exception {
     mvc.perform(post("/api/v1/anomaly").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\"}"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.title").value("Richiesta non valida"));
+        .andExpect(jsonPath("$.title").value("Invalid request"));
     mvc.perform(post("/api/v1/anomaly").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"year\":2019,\"month\":13}"))
         .andExpect(status().isBadRequest());
   }
@@ -266,7 +266,7 @@ class ApiIT {
     // gennaio, vegetazione: 31 giorni x 13 punti = 403 righe, oltre il limite di prova (300): 413
     mvc.perform(post("/api/v1/export/hotspots.csv").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"from\":\"2019-01\",\"to\":\"2019-01\"}"))
         .andExpect(status().isContentTooLarge())
-        .andExpect(jsonPath("$.title").value("Export troppo grande"));
+        .andExpect(jsonPath("$.title").value("Export too large"));
     // dieci giorni sarebbero 130: un solo mese e' troppo, ma marzo (10 giorni, 13 punti) sta nel limite
     MvcResult r = mvc.perform(post("/api/v1/export/hotspots.csv").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"from\":\"2019-03\",\"to\":\"2019-03\"}"))
         .andReturn();
@@ -288,23 +288,69 @@ class ApiIT {
   void errorsAreProblemDetails() throws Exception {
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Atlantide\"}"))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.title").value("Area sconosciuta"))
+        .andExpect(jsonPath("$.title").value("Unknown area"))
         .andExpect(jsonPath("$.status").value(404));
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{\"geometry\":{\"type\":\"Point\",\"coordinates\":[10,40]}}"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.title").value("Area non valida"));
+        .andExpect(jsonPath("$.title").value("Invalid area"));
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"from\":\"2025/01\"}"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("AAAA-MM")));
+        .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("YYYY-MM")));
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"from\":\"2020-01\",\"to\":\"2019-01\"}"))
         .andExpect(status().isBadRequest());
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"dayNight\":\"X\"}"))
         .andExpect(status().isBadRequest());
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("non json"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.title").value("Richiesta non leggibile"));
+        .andExpect(jsonPath("$.title").value("Unreadable request"));
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{}"))
         .andExpect(status().isBadRequest());
+  }
+
+  // ---- lingua dei messaggi (Accept-Language) ----
+
+  private org.springframework.test.web.servlet.ResultActions postIn(String language, String path, String body) throws Exception {
+    var request = post("/api/v1" + path).contentType(MediaType.APPLICATION_JSON).content(body);
+    return mvc.perform(language == null ? request : request.header("Accept-Language", language));
+  }
+
+  @Test
+  void messagesAreInEnglishByDefaultAndFollowAcceptLanguage() throws Exception {
+    String unknown = "{\"boundaryCode\":\"Atlantide\"}";
+    postIn(null, "/calendar", unknown).andExpect(jsonPath("$.title").value("Unknown area"));
+    postIn("it-IT,it;q=0.9,en;q=0.8", "/calendar", unknown)
+        .andExpect(jsonPath("$.title").value("Area sconosciuta"))
+        .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Paese sconosciuto")));
+    postIn("en-GB", "/calendar", unknown).andExpect(jsonPath("$.title").value("Unknown area"));
+  }
+
+  @Test
+  void anUnsupportedLanguageFallsBackToEnglishNotToTheServerLanguage() throws Exception {
+    postIn("fr-FR", "/calendar", "{\"boundaryCode\":\"Atlantide\"}").andExpect(jsonPath("$.title").value("Unknown area"));
+    postIn("de", "/calendar", "{\"boundaryCode\":\"Atlantide\"}").andExpect(jsonPath("$.title").value("Unknown area"));
+  }
+
+  @Test
+  void notesAndAnomalyReasonsAreTranslatedToo() throws Exception {
+    postIn("it", "/calendar", "{\"boundaryCode\":\"Italy\"}")
+        .andExpect(jsonPath("$.notes[0]").value(org.hamcrest.Matchers.containsString("Nessuna armonizzazione")));
+    postIn("it", "/anomaly", "{\"boundaryCode\":\"Italy\",\"year\":2019,\"month\":1}")
+        .andExpect(jsonPath("$.reason").value(org.hamcrest.Matchers.containsString("nessun anno di riferimento")));
+    postIn("it", "/month-detail", "{\"boundaryCode\":\"Italy\",\"year\":2019,\"month\":1}")
+        .andExpect(jsonPath("$.notes[0]").value(org.hamcrest.Matchers.containsString("Conteggi grezzi")));
+    mvc.perform(get("/api/v1/metadata").header("Accept-Language", "it"))
+        .andExpect(jsonPath("$.notes[0]").value(org.hamcrest.Matchers.containsString("Dati standard")));
+    mvc.perform(get("/api/v1/metadata"))
+        .andExpect(jsonPath("$.notes[0]").value(org.hamcrest.Matchers.containsString("Standard (SP) data")));
+  }
+
+  @Test
+  void theETagDiffersByLanguageSoACachedAnswerIsNeverInTheWrongLanguage() throws Exception {
+    String english = mvc.perform(get("/api/v1/metadata")).andReturn().getResponse().getHeader("ETag");
+    String italian = mvc.perform(get("/api/v1/metadata").header("Accept-Language", "it")).andReturn().getResponse().getHeader("ETag");
+    assertThat(english).isNotEqualTo(italian);
+    mvc.perform(get("/api/v1/metadata").header("Accept-Language", "it").header("If-None-Match", english)).andExpect(status().isOk());
+    mvc.perform(get("/api/v1/metadata").header("Accept-Language", "it").header("If-None-Match", italian)).andExpect(status().isNotModified());
   }
 
   // ---- metadati, aree, ETag, OpenAPI ----

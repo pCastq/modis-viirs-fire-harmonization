@@ -73,7 +73,7 @@ public class CalendarService {
 
     public CalendarQuery {
       if (from.isAfter(to)) {
-        throw new IllegalArgumentException("Periodo invertito: " + from + " > " + to);
+        throw new InvalidRequestException("request.periodInverted", from, to);
       }
     }
 

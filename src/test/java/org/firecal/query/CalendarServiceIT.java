@@ -160,7 +160,7 @@ class CalendarServiceIT {
     setMethod("inventato@9");
     assertThatThrownBy(() -> italy(SourceTypeFilter.VEGETATION))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("Metodo di armonizzazione sconosciuto");
+        .hasMessageContaining("method.unknown");
   }
 
   // ---- copertura: quali satelliti entrano nel mese ----
@@ -212,15 +212,15 @@ class CalendarServiceIT {
   void invalidAreasAreRefusedWithAClearReason() {
     String bowTie = "{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[2,2],[2,0],[0,2],[0,0]]]}";
     assertThatThrownBy(() -> calendar.calendar(query(AreaSpec.ofGeometry(bowTie), SourceTypeFilter.ALL)))
-        .isInstanceOf(InvalidAreaException.class).hasMessageContaining("non valido");
+        .isInstanceOf(InvalidAreaException.class).hasMessageContaining("area.polygonInvalid");
     String point = "{\"type\":\"Point\",\"coordinates\":[10,40]}";
     assertThatThrownBy(() -> calendar.calendar(query(AreaSpec.ofGeometry(point), SourceTypeFilter.ALL)))
-        .isInstanceOf(InvalidAreaException.class).hasMessageContaining("Polygon");
+        .isInstanceOf(InvalidAreaException.class).hasMessageContaining("area.geometryType");
     String huge = "{\"type\":\"Polygon\",\"coordinates\":[[[-100,-60],[100,-60],[100,60],[-100,60],[-100,-60]]]}";
     assertThatThrownBy(() -> calendar.calendar(query(AreaSpec.ofGeometry(huge), SourceTypeFilter.ALL)))
-        .isInstanceOf(InvalidAreaException.class).hasMessageContaining("troppo grande");
+        .isInstanceOf(InvalidAreaException.class).hasMessageContaining("area.tooLarge");
     assertThatThrownBy(() -> calendar.calendar(query(AreaSpec.ofGeometry("non e' json"), SourceTypeFilter.ALL)))
-        .isInstanceOf(InvalidAreaException.class).hasMessageContaining("GeoJSON");
+        .isInstanceOf(InvalidAreaException.class).hasMessageContaining("area.geojsonUnreadable");
   }
 
   @Test

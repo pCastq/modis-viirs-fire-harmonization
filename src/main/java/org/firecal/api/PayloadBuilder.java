@@ -35,30 +35,34 @@ public class PayloadBuilder {
     return new FilterInfo(q.sourceType().name(), q.dayNight().name(), q.minConfidence().name());
   }
 
-  /** Avvertenze da mostrare insieme ai numeri: chi li legge non deve poterli fraintendere. */
+  private final ApiMessages messages;
+
+  public PayloadBuilder(ApiMessages messages) {
+    this.messages = messages;
+  }
+
+  /** Avvertenze da mostrare insieme ai numeri, nella lingua della richiesta: chi le legge non deve fraintendere. */
   public List<String> notes(CalendarService.CalendarData data, SourceTypeFilter sourceType) {
     List<String> notes = new ArrayList<>();
     String method = data.method().toString();
     if (data.method().id().equals("fixed-factor")) {
-      notes.add(
-          "Metodo di armonizzazione PROVVISORIO (" + method + "): usa fattori globali, uguali per ogni regione, mese e giorno/notte."
-              + " L'incertezza dichiarata e' una stima prudente, non una misura. Il metodo definitivo e' in studio.");
+      notes.add(messages.text("note.methodProvisional", method));
     } else if (data.method().id().equals("raw-sum")) {
-      notes.add("Nessuna armonizzazione (" + method + "): somma dei conteggi di tutti i satelliti. Mostra il salto artificiale del 2012 (arrivo di VIIRS).");
+      notes.add(messages.text("note.methodRaw", method));
     }
     switch (data.resolution()) {
-      case "0.1" -> notes.add("Poligono grande: calcolato sulla piramide a 0,1 gradi; il bordo dell'area e' approssimato fino a ~5 km.");
-      case "paese" -> notes.add("Paese: totali precalcolati, con il paese assegnato da FIRMS a ogni punto.");
+      case "0.1" -> notes.add(messages.text("note.resolutionPyramid"));
+      case "paese" -> notes.add(messages.text("note.resolutionCountry"));
       default -> {}
     }
     if (sourceType == SourceTypeFilter.VEGETATION) {
-      notes.add("Solo incendi di vegetazione. Le altre sorgenti (industriali, vulcani, offshore) sono escluse: usare sourceType=ALL per includerle.");
+      notes.add(messages.text("note.vegetationOnly"));
     }
     boolean incomplete = data.harmonized().values().stream().anyMatch(MonthlyValue::incomplete);
     if (incomplete) {
-      notes.add("Alcuni mesi sono incompleti (giorni mancanti dei satelliti): non sono confrontabili e sono esclusi dalla mediana storica.");
+      notes.add(messages.text("note.incompleteMonths"));
     }
-    notes.add("Le celle-giorno sono quadrati da 0,01 gradi attivi in un giorno: la loro area va da ~1,2 km2 all'equatore a ~0,7 km2 in Terra del Fuoco.");
+    notes.add(messages.text("note.cellDayArea"));
     return notes;
   }
 

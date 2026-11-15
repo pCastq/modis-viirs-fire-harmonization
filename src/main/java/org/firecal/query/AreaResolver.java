@@ -65,7 +65,7 @@ public class AreaResolver {
   private Resolved country(String name) {
     List<Integer> ids = jdbc.queryForList("SELECT id FROM country WHERE name = ? AND in_scope", Integer.class, name);
     if (ids.isEmpty()) {
-      throw new InvalidAreaException("Paese sconosciuto o non caricato: " + name, true);
+      throw InvalidAreaException.notFound("area.unknownCountry", name);
     }
     double[] box =
         countryBoxes.computeIfAbsent(
@@ -96,28 +96,28 @@ public class AreaResolver {
               + " FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON(?), 4326) AS g) q",
           geoJson);
     } catch (DataAccessException e) {
-      throw new InvalidAreaException("GeoJSON non leggibile");
+      throw new InvalidAreaException("area.geojsonUnreadable");
     }
     if (!Boolean.TRUE.equals(row.get("valid"))) {
-      throw new InvalidAreaException("Poligono non valido (per esempio auto-intersecante)");
+      throw new InvalidAreaException("area.polygonInvalid");
     }
     String type = String.valueOf(row.get("type"));
     if (!type.equals("ST_Polygon") && !type.equals("ST_MultiPolygon")) {
-      throw new InvalidAreaException("La geometria deve essere un Polygon o un MultiPolygon, non " + type);
+      throw new InvalidAreaException("area.geometryType", type);
     }
     if (((Number) row.get("npoints")).intValue() > MAX_VERTICES) {
-      throw new InvalidAreaException("Troppi vertici (massimo " + MAX_VERTICES + ")");
+      throw new InvalidAreaException("area.tooManyVertices", MAX_VERTICES);
     }
     double west = ((Number) row.get("w")).doubleValue();
     double south = ((Number) row.get("s")).doubleValue();
     double east = ((Number) row.get("e")).doubleValue();
     double north = ((Number) row.get("n")).doubleValue();
     if (west < -180 || east > 180 || south < -90 || north > 90) {
-      throw new InvalidAreaException("Coordinate fuori intervallo (lon -180..180, lat -90..90)");
+      throw new InvalidAreaException("area.coordinatesRange");
     }
     if (east - west > MAX_WIDTH_DEGREES || north - south > MAX_HEIGHT_DEGREES) {
-      throw new InvalidAreaException("Area troppo grande (il rettangolo limite supera quello del Sud America)");
+      throw new InvalidAreaException("area.tooLarge");
     }
-    return new Resolved(Kind.POLYGON, null, geoJson, west, south, east, north, "poligono disegnato");
+    return new Resolved(Kind.POLYGON, null, geoJson, west, south, east, north, "drawn polygon");
   }
 }

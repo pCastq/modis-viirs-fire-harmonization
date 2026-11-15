@@ -476,3 +476,87 @@ Conseguenza sul riferimento: se S-NPP non produce piu' dati dal 2026-11-02, il m
 6. Province/regioni: servono poligoni amministrativi da scaricare (da concordare con l'utente prima di scaricare).
 7. `hotspot_raw` reale ~130 byte/riga (stima iniziale 99).
 8. NOAA-21 e 2026 non ancora caricati (richiede MAP_KEY FIRMS, a cura dell'utente).
+
+## 14. Front-end (Step 25, 2026-11-15)
+
+**Obiettivo (dalla sfida):** una web app in cui l'utente sceglie area e periodo e vede il *calendario di attivita'*
+(quando brucia di piu', quali anni, come si confronta l'oggi con il passato), con scala di colore accessibile e CSV
+scaricabile. Pubblico: protezione civile, scienziati, gestori del territorio, vigili del fuoco.
+
+**Scelte**
+- React 19 + TypeScript (strict) + Vite; stato dei dati con TanStack Query; **nessuna libreria di grafici** (calendario
+  in HTML accessibile, altri grafici in SVG con scale proprie e testate); Leaflet per le mappe.
+- **Stato = URL**: ogni vista e' un link condivisibile; indietro/avanti del browser funzionano.
+- Struttura a strati (`api`, `domain` puro, `state`, `hooks`, `components`, `features`), dominio senza React.
+- Scala sequenziale YlOrRd (conteggi, radice quadrata) e divergente PuOr (rispetto al tipico), entrambe sicure per il
+  daltonismo; il test di contrasto ha trovato e fatto correggere il colore del testo sulle celle (nero/bianco scelto
+  per rapporto di contrasto reale, minimo 4,5:1).
+- Il valore non e' mai solo colore: numero nella cella, trama per i mesi incompleti, bordo per i provvisori, tratteggio
+  per l'assenza di dati (un mese senza dati non e' uno zero).
+- Il metodo provvisorio e' dichiarato in alto in ogni schermata (banner + etichetta) e le note dell'API sono mostrate.
+- Formato numeri proprio (`12,3K`) invece di `Intl` compatto: l'output di `Intl` varia fra browser e Node.
+- Per la scoperta: il backend rimane l'unica fonte dei numeri; la vista «Rispetto al tipico» colora con la mediana
+  mensile calcolata sul calendario scaricato (solo presentazione), l'anomalia formale resta `/anomaly`.
+
+**Verificato:** 91 test (domino puro, griglia da tastiera, form coordinate, integrazione dell'intera app con finto
+server: filtri, URL, dettaglio, errori e "Riprova"), tipi, lint, formato e build di produzione puliti; prova nel
+browser con i dati reali (Argentina: totale, calendario, dettaglio agosto 2019 con Terra 3.090 / Aqua 8.378 / S-NPP
+22.892 / NOAA-20 23.326 come nel calendario, disegno di un rettangolo -> risoluzione 0,1 gradi).
+
+**Da verificare / debiti**
+1. Le mappe usano i tile OpenStreetMap pubblici: per un uso reale serve un fornitore dedicato (o tile propri).
+2. Provato a mano solo con Chromium (pannello del browser integrato); nessun test automatico end-to-end (Playwright).
+3. Il dettaglio mostra al massimo 5.000 punti per giorno (limite dell'API): oltre, serve l'export CSV.
+4. Non c'e' ancora una selezione "provincia/regione": serve scaricare i confini amministrativi (da concordare).
+5. Servire il front-end compilato dal backend (un solo processo) non e' configurato: oggi sono due processi
+   (Vite in sviluppo con proxy; `npm run build` produce `frontend/dist`).
+6. I messaggi del backend usano apostrofi al posto degli accenti (`e'`): il front-end non li altera; da uniformare.
+7. Accessibilita': verificate tastiera e contrasti; manca una prova con uno screen reader reale.
+
+## 15. Internazionalizzazione del front-end (Step 26, 2026-11-15)
+
+**Richiesta:** prevedere l'internazionalizzazione; **inglese di default**.
+
+**Scelte**
+- Soluzione propria e leggera (`src/i18n/`, ~150 righe) invece di una libreria (i18next, FormatJS): sono due lingue, i
+  messaggi hanno solo segnaposto e plurali, e cosi' le chiavi sono **tipizzate**: il catalogo italiano ha il tipo di
+  quello inglese e una chiave mancante non compila (piu' un test sui segnaposto).
+- Default inglese anche se il browser e' italiano (scelta esplicita); precedenza `?lang=` > scelta salvata > inglese.
+- Formati (numeri, mesi) da `Intl` con la lingua scelta; testi nei componenti solo tramite `t()`. Nessun testo
+  nelle funzioni di dominio (l'anomalia restituisce un livello, la UI lo traduce).
+- Errori di rete generati dal client: la UI li traduce (`errorText`); quelli del server restano come arrivano.
+
+**Verificato:** 103 test (parita' dei cataloghi, plurali, rilevamento lingua, app in inglese e cambio in italiano con
+scelta ricordata), tipi, lint, build; prova nel browser: avvio in inglese, passaggio a italiano (titolo, intestazioni,
+numeri `4.514.876`, mesi) e ritorno.
+
+**Da verificare / debiti**
+8. ~~Il backend risponde in italiano~~ **Risolto (Step 27, sotto).**
+9. I nomi dei paesi arrivano in inglese dal backend (es. «Italy») anche nell'interfaccia italiana.
+10. Solo inglese e italiano; nessuna lingua con scrittura da destra a sinistra provata (layout non verificato per RTL).
+
+## 16. Lingue dell'API (Step 27, 2026-11-15)
+
+**Problema:** con l'interfaccia in inglese, note ed errori del server arrivavano in italiano (debito 8 della sezione 15).
+
+**Scelte**
+- L'API legge `Accept-Language`; lingue supportate inglese e italiano, **inglese di riserva** (header assente o lingua non
+  supportata). `fallbackToSystemLocale=false`: la risposta non dipende mai dalla lingua del server.
+- Catalogo con `MessageSource` standard (`messages/api*.properties`), nessuna dipendenza nuova. Apostrofi tipografici
+  (`’`) nei testi, perche' i messaggi passano da `MessageFormat` (l'apostrofo dritto va raddoppiato).
+- Il livello `query` resta senza lingue e senza Spring: le eccezioni portano **codice + argomenti** (`Localizable`:
+  `InvalidAreaException`, `InvalidRequestException`, `ExportTooLargeException`, `NoDataException`) e `ApiMessages` li
+  traduce con la lingua della richiesta (`LocaleContextHolder`). La regola ArchUnit sulla purezza del dominio passa.
+- `getMessage()` delle eccezioni e' ora il codice (stabile): i test lo confrontano al posto di frasi.
+- L'ETag include la lingua: una risposta in cache non puo' essere servita nella lingua sbagliata.
+- Front-end: invia `Accept-Language` e include la lingua nella chiave della cache (`createApi(language)`).
+
+**Verificato:** `./mvnw verify` verde (359 unit + 103 IT; nuovi: parita' dei due cataloghi e dei segnaposto, default
+inglese, italiano, lingua non supportata -> inglese, note/anomalia/metadati tradotti, ETag per lingua); 104 test front-end;
+nel browser note e dettaglio passano da inglese a italiano e ritorno.
+
+**Da verificare / debiti**
+11. Le descrizioni OpenAPI/Swagger (`@Operation`) restano in italiano: sono documentazione per sviluppatori, non
+    risposte; da tradurre se la documentazione deve essere in inglese.
+12. I messaggi degli errori interni/di log restano in inglese (non vanno all'utente).
+13. I nomi dei paesi arrivano in inglese dal DB anche con `Accept-Language: it` (debito 9).

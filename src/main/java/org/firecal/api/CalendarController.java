@@ -35,8 +35,10 @@ public class CalendarController {
   private final RequestMapper mapper;
   private final PayloadBuilder builder;
   private final DataInfoService info;
+  private final ApiMessages messages;
 
-  public CalendarController(CalendarService calendar, RequestMapper mapper, PayloadBuilder builder, DataInfoService info) {
+  public CalendarController(CalendarService calendar, RequestMapper mapper, PayloadBuilder builder, DataInfoService info, ApiMessages messages) {
+    this.messages = messages;
     this.calendar = calendar;
     this.mapper = mapper;
     this.builder = builder;
@@ -71,7 +73,7 @@ public class CalendarController {
     List<String> notes = builder.notes(p.data(), p.query().sourceType());
     AnomalyResponse body;
     if (anomaly.isEmpty()) {
-      String reason = series.months().containsKey(target) ? "nessun anno di riferimento: servono altri anni completi dello stesso mese" : "nessun dato per il mese richiesto";
+      String reason = messages.text(series.months().containsKey(target) ? "anomaly.noReference" : "anomaly.noData");
       body = new AnomalyResponse(false, reason, target.toString(), null, null, null, null, null, null, null, List.of(), false, false, false,
           builder.method(p.data().method()), p.data().resolution(), notes);
     } else {

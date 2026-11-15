@@ -1,0 +1,77 @@
+.figure {
+  margin: 0;
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.tickY {
+  fill: var(--text-muted);
+  font-size: 11px;
+  text-anchor: end;
+}
+
+.tickX {
+  fill: var(--text-muted);
+  font-size: 11px;
+  text-anchor: middle;
+  text-transform: capitalize;
+}
+
+.strong {
+  fill: var(--text);
+  font-weight: 700;
+}
+
+.whisker {
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+}
+
+.box {
+  fill: #fdae61;
+  stroke: #b35806;
+  stroke-width: 1;
+}
+
+.boxPeak {
+  fill: #e31a1c;
+  stroke: #800026;
+  stroke-width: 1.5;
+}
+
+.median {
+  stroke: var(--text);
+  stroke-width: 2.5;
+}
+
+.bar {
+  fill: #e08214;
+}
+
+.barProvisional {
+  fill: #e08214;
+  fill-opacity: 0.45;
+  stroke: #b35806;
+  stroke-dasharray: 3 2;
+}
+
+.trendLine {
+  stroke: var(--focus);
+  stroke-width: 2.5;
+  stroke-dasharray: 7 5;
+}
+
+.caption {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}

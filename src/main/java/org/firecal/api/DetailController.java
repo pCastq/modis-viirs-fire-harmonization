@@ -35,6 +35,7 @@ public class DetailController {
 
   private static final MediaType CSV = new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8);
 
+  private final ApiMessages messages;
   private final DetailService detail;
   private final CalendarService calendar;
   private final AreaResolver resolver;
@@ -42,7 +43,8 @@ public class DetailController {
   private final PayloadBuilder builder;
   private final DataInfoService info;
 
-  public DetailController(DetailService detail, CalendarService calendar, AreaResolver resolver, RequestMapper mapper, PayloadBuilder builder, DataInfoService info) {
+  public DetailController(DetailService detail, CalendarService calendar, AreaResolver resolver, RequestMapper mapper, PayloadBuilder builder, DataInfoService info, ApiMessages messages) {
+    this.messages = messages;
     this.detail = detail;
     this.calendar = calendar;
     this.resolver = resolver;
@@ -90,8 +92,8 @@ public class DetailController {
     }
     MonthDetailResponse body = new MonthDetailResponse(
         builder.area(area), month.toString(), builder.filters(q), days, totals,
-        List.of("Conteggi grezzi per satellite (celle-giorno attive). Il valore armonizzato e' del mese intero, non del singolo giorno.",
-            "Stato del giorno: OK, PARTIAL (trasmissione parziale) o MISSING (nessun dato: non e' zero fuochi)."));
+        List.of(messages.text("note.detailRawPerSatellite"),
+            messages.text("note.detailGaps")));
     return ResponseEntity.ok().eTag(info.etag(req)).body(body);
   }
 

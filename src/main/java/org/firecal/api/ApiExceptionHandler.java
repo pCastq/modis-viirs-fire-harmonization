@@ -3,6 +3,7 @@ package org.firecal.api;
 import java.net.URI;
 import org.firecal.query.ExportTooLargeException;
 import org.firecal.query.InvalidAreaException;
+import org.firecal.query.Localizable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -22,9 +23,15 @@ public class ApiExceptionHandler {
 
   private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
-  private static ProblemDetail problem(HttpStatus status, String title, String detail) {
+  private final ApiMessages messages;
+
+  public ApiExceptionHandler(ApiMessages messages) {
+    this.messages = messages;
+  }
+
+  private ProblemDetail problem(HttpStatus status, String titleCode, String detail) {
     ProblemDetail p = ProblemDetail.forStatusAndDetail(status, detail);
-    p.setTitle(title);
+    p.setTitle(messages.text(titleCode));
     p.setType(URI.create("https://firecal.example/problems/" + status.value()));
     return p;
   }
@@ -32,33 +39,34 @@ public class ApiExceptionHandler {
   @ExceptionHandler(InvalidAreaException.class)
   ProblemDetail invalidArea(InvalidAreaException e) {
     return e.isNotFound()
-        ? problem(HttpStatus.NOT_FOUND, "Area sconosciuta", e.getMessage())
-        : problem(HttpStatus.BAD_REQUEST, "Area non valida", e.getMessage());
+        ? problem(HttpStatus.NOT_FOUND, "error.area.unknown", messages.text(e))
+        : problem(HttpStatus.BAD_REQUEST, "error.area.invalid", messages.text(e));
   }
 
   @ExceptionHandler(IllegalArgumentException.class)
   ProblemDetail illegalArgument(IllegalArgumentException e) {
-    return problem(HttpStatus.BAD_REQUEST, "Richiesta non valida", e.getMessage());
+    String detail = e instanceof Localizable localizable ? messages.text(localizable) : e.getMessage();
+    return problem(HttpStatus.BAD_REQUEST, "error.request.invalid", detail);
   }
 
   @ExceptionHandler(HttpMessageNotReadableException.class)
   ProblemDetail unreadable(HttpMessageNotReadableException e) {
-    return problem(HttpStatus.BAD_REQUEST, "Richiesta non leggibile", "Il corpo della richiesta non e' un JSON valido o ha campi del tipo sbagliato");
+    return problem(HttpStatus.BAD_REQUEST, "error.request.unreadable", messages.text("error.request.unreadable.detail"));
   }
 
   @ExceptionHandler(ExportTooLargeException.class)
   ProblemDetail tooLarge(ExportTooLargeException e) {
-    return problem(HttpStatus.CONTENT_TOO_LARGE, "Export troppo grande", e.getMessage());
+    return problem(HttpStatus.CONTENT_TOO_LARGE, "error.export.tooLarge", messages.text(e));
   }
 
   @ExceptionHandler(DataInfoService.NoDataException.class)
   ProblemDetail noData(DataInfoService.NoDataException e) {
-    return problem(HttpStatus.SERVICE_UNAVAILABLE, "Dati non disponibili", e.getMessage());
+    return problem(HttpStatus.SERVICE_UNAVAILABLE, "error.data.unavailable", messages.text(e));
   }
 
   @ExceptionHandler({java.sql.SQLException.class, DataAccessException.class})
   ProblemDetail database(Exception e) {
-    log.error("Errore del database", e);
-    return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Errore del database", "La richiesta non e' stata completata. Riprovare piu' tardi.");
+    log.error("Database error", e);
+    return problem(HttpStatus.INTERNAL_SERVER_ERROR, "error.database", messages.text("error.database.detail"));
   }
 }

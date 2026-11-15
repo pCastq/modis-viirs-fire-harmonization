@@ -39,8 +39,10 @@ public class MetadataController {
   private final DataInfoService info;
 
   private final DetailService detail;
+  private final ApiMessages messages;
 
-  public MetadataController(JdbcTemplate jdbc, AreaResolver resolver, MethodRegistry registry, CalendarService calendar, DataInfoService info, DetailService detail) {
+  public MetadataController(JdbcTemplate jdbc, AreaResolver resolver, MethodRegistry registry, CalendarService calendar, DataInfoService info, DetailService detail, ApiMessages messages) {
+    this.messages = messages;
     this.detail = detail;
     this.jdbc = jdbc;
     this.resolver = resolver;
@@ -83,10 +85,7 @@ public class MetadataController {
     limits.put("maxExportRows", detail.maxExportRows());
     limits.put("maxPolygonVertices", AreaResolver.MAX_VERTICES);
     limits.put("exactResolutionMaxBoxDegrees2", CalendarService.EXACT_MAX_BOX_DEGREES2);
-    List<String> notes = List.of(
-        "Dati standard (SP) fino al 2025-12-31 per il Sud America e l'Italia; i dati NRT e il 2026 non sono ancora caricati.",
-        "NOAA-21 non e' ancora caricato. S-NPP ha smesso di fornire dati il 2026-11-02 (dichiarato da FIRMS).",
-        "Aree disponibili oggi: i paesi del perimetro (Sud America e Italia) e poligoni disegnati. Province e regioni richiedono confini amministrativi non ancora caricati.");
+    List<String> notes = List.of(messages.text("note.metaDataCoverage"), messages.text("note.metaSatellites"), messages.text("note.metaAreas"));
     Metadata body = new Metadata(
         range.first().toString(), range.last().toString(), new MethodInfo(ref.id(), ref.version()), ref.id().equals("fixed-factor"),
         available, satellites, boundaries(null), info.lastIngest(), "VEGETATION", limits, notes);

@@ -1,0 +1,26 @@
+.notice {
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+}
+
+.title {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.info {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+}
+
+.warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
+.error {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+}

@@ -1,0 +1,67 @@
+.svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.grid {
+  stroke: var(--border);
+}
+
+.tickY {
+  fill: var(--text-muted);
+  font-size: 11px;
+  text-anchor: end;
+}
+
+.tickX {
+  fill: var(--text-muted);
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+.selection {
+  fill: var(--focus);
+  fill-opacity: 0.14;
+}
+
+.hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.hit:hover {
+  fill: var(--focus);
+  fill-opacity: 0.1;
+}
+
+.hit:focus-visible {
+  outline: 3px solid var(--focus);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legendNote {
+  flex-basis: 100%;
+}

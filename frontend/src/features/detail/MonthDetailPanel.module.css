@@ -1,0 +1,43 @@
+.body {
+  display: grid;
+  gap: 12px;
+}
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.totals li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.totals i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.map {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.mapTitle {
+  font-size: 0.95rem;
+}
+
+.tip {
+  margin-top: 14px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
