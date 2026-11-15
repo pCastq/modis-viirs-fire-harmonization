@@ -5,10 +5,13 @@ import type {
   AreaRequest,
   BoundaryInfo,
   CalendarResponse,
+  HarmonizationResponse,
   HotspotCollection,
   Metadata,
   MonthDetailResponse,
   SeasonalProfileResponse,
+  SourceTypeFilter,
+  ConfidenceFilter,
 } from './types';
 
 const BASE = '/api/v1';
@@ -22,6 +25,14 @@ export function createApi(language: string) {
     metadata: (signal?: AbortSignal) => getJson<Metadata>(`${BASE}/metadata`, language, signal),
     boundaries: (signal?: AbortSignal) =>
       getJson<BoundaryInfo[]>(`${BASE}/boundaries`, language, signal),
+    harmonization: (
+      boundaryCode: string,
+      filters: { sourceType: SourceTypeFilter; minConfidence: ConfidenceFilter },
+      signal?: AbortSignal,
+    ) => {
+      const params = new URLSearchParams({ boundaryCode, ...filters });
+      return getJson<HarmonizationResponse>(`${BASE}/harmonization?${params}`, language, signal);
+    },
     calendar: (body: AreaRequest, signal?: AbortSignal) =>
       postJson<CalendarResponse>(`${BASE}/calendar`, body, language, signal),
     anomaly: (body: AreaRequest, signal?: AbortSignal) =>

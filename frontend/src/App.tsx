@@ -6,6 +6,7 @@ import { MonthDetailPanel } from '@/features/detail/MonthDetailPanel';
 import { ExportPanel } from '@/features/export/ExportPanel';
 import { AnalysisGrid, SummaryStrip } from '@/features/insights/AnalysisSection';
 import { SearchPanel } from '@/features/search/SearchPanel';
+import { HarmonizationPanel } from '@/features/status/HarmonizationPanel';
 import { Header } from '@/features/status/Header';
 import { NotesPanel } from '@/features/status/NotesPanel';
 import { useCalendar, useMetadata } from '@/hooks/queries';
@@ -61,6 +62,7 @@ export function App() {
                 ) : null}
                 <AnalysisGrid query={query} calendar={data} focus={focus} />
                 <ExportPanel query={query} focusMonth={focus.month} />
+                <HarmonizationPanel query={query} />
                 <NotesPanel notes={data.notes} />
               </>
             )}

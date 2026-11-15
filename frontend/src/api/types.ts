@@ -217,6 +217,49 @@ export interface Metadata {
   notes: string[];
 }
 
+/** I tre filtri giorno/notte dell'API di armonizzazione, con i nomi con cui li scrive il server. */
+export type FactorDayNight = 'ANY' | 'DAY' | 'NIGHT';
+
+/** Da quale livello viene un k: il paese, tutti i paesi insieme o l'intera calibrazione. */
+export type FactorSource = 'COUNTRY' | 'REGION' | 'GLOBAL';
+
+export interface CalibrationInfo {
+  /** `AAAA-MM` */
+  from: string;
+  to: string;
+  monthsUsed: number;
+}
+
+/** Il moltiplicatore k di un trimestre e di un filtro giorno/notte, con le somme da cui nasce. */
+export interface HarmonizationFactor {
+  /** 1 = gennaio-marzo */
+  quarter: 1 | 2 | 3 | 4;
+  dayNight: FactorDayNight;
+  /** Celle-giorno VIIRS per ogni cella-giorno MODIS (Terra+Aqua); `null` senza calibrazione. */
+  k: number | null;
+  source: FactorSource | null;
+  viirsCellDays: number;
+  modisCellDays: number;
+}
+
+export interface UncertaintyBand {
+  /** Fascia di celle-giorno MODIS del mese, per esempio `100-299`. */
+  level: string;
+  relativeUncertainty: number;
+}
+
+export interface HarmonizationResponse {
+  method: MethodInfo;
+  calibration: CalibrationInfo | null;
+  area: string;
+  satelliteGroup: string;
+  sourceType: SourceTypeFilter;
+  minConfidence: ConfidenceFilter;
+  factors: HarmonizationFactor[];
+  uncertaintyBands: UncertaintyBand[];
+  notes: string[];
+}
+
 /** Problem Details (RFC 9457) restituito dall'API per ogni errore. */
 export interface ProblemDetails {
   type?: string;

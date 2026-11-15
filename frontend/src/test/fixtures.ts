@@ -2,6 +2,7 @@ import type {
   AnnualTrendResponse,
   AnomalyResponse,
   CalendarResponse,
+  HarmonizationResponse,
   Metadata,
   MonthDetailResponse,
   SeasonalProfileResponse,
@@ -127,5 +128,30 @@ export const monthDetail: MonthDetailResponse = {
     { date: '2019-01-02', bySatellite: { SNPP: 20 }, status: { SNPP: 'OK', AQUA: 'MISSING' } },
   ],
   monthTotalsBySatellite: { SNPP: 50, AQUA: 5 },
+  notes: [],
+};
+
+/** Argentina: tre trimestri con k propri; di notte, nel secondo, troppo pochi dati (k preso da tutta la calibrazione). */
+export const harmonization: HarmonizationResponse = {
+  method: { id: 'country-quarter-k', version: '1' },
+  calibration: { from: '2012-01', to: '2018-12', monthsUsed: 83 },
+  area: 'Argentina',
+  satelliteGroup: 'TERRA_AQUA',
+  sourceType: 'VEGETATION',
+  minConfidence: 'NOMINAL',
+  factors: ([1, 2, 3, 4] as const).flatMap((quarter) =>
+    (['ANY', 'DAY', 'NIGHT'] as const).map((dayNight) => ({
+      quarter,
+      dayNight,
+      k: quarter + (dayNight === 'NIGHT' ? 2.5 : dayNight === 'DAY' ? 0.25 : 0),
+      source: quarter === 2 && dayNight === 'NIGHT' ? ('GLOBAL' as const) : ('COUNTRY' as const),
+      viirsCellDays: 1000 * quarter,
+      modisCellDays: 400,
+    })),
+  ),
+  uncertaintyBands: [
+    { level: '<10', relativeUncertainty: 1 },
+    { level: '1000+', relativeUncertainty: 0.19 },
+  ],
   notes: [],
 };

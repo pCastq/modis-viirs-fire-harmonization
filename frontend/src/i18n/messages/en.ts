@@ -229,6 +229,32 @@ export const en = {
     hotspotsOf: 'Hotspots of {month}',
     tooLargeHint: ' Narrow the area or the period, or download one month at a time.',
   },
+  harmonization: {
+    title: 'How MODIS and VIIRS are made comparable',
+    subtitle: 'The multipliers (k) used for {area}',
+    intro:
+      'MODIS (Terra and Aqua) sees fewer active cells than VIIRS. To compare them, every MODIS cell-day is multiplied by k: the number of VIIRS cell-days seen for each MODIS one in the same country, quarter of the year and time of day. VIIRS is used as it is.',
+    tableCaption: 'Multiplier k by quarter and time of day',
+    quarter: 'Quarter',
+    quarterRange: '{from}–{to}',
+    all: 'All day',
+    day: 'Day',
+    night: 'Night',
+    cellTitle: '{viirs} VIIRS and {modis} MODIS cell-days',
+    borrowedRegion: 'Too little data in this quarter: k comes from all countries together',
+    borrowedGlobal: 'Too little data in this quarter: k comes from the whole calibration',
+    borrowedFootnote:
+      'Marked values: too little data in the country in that quarter, so k comes from all countries together or from the whole calibration. Hover over a value for details.',
+    notCalibrated: 'not calibrated',
+    calibration: 'Calibrated on {from} – {to} ({months} complete months). Method {method}.',
+    noCalibration: 'No calibration yet: MODIS counts are shown as they are.',
+    unitNote:
+      'k counts cell-days (one active 0.01° cell in one day), not raw hotspots: the ratio between raw hotspot counts is higher.',
+    bandsTitle: 'Declared uncertainty of a month, by size of the MODIS count',
+    bandLabel: '{level} cell-days',
+    freeArea:
+      'A drawn area has no single multiplier: the method uses a local one for each 2-degree block, pulled toward the country multiplier when the block has little data. Choose a country to see its multipliers.',
+  },
   notes: { title: 'How to read this data' },
 } satisfies MessageTree;
 

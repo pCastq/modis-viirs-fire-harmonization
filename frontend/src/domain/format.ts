@@ -13,6 +13,8 @@ export interface Formatters {
   /** 61234 -> "61.2K" / "61,2K"; per le etichette dentro le celle. */
   compact(value: number | null | undefined): string;
   decimal(value: number | null | undefined): string;
+  /** Moltiplicatore k con due decimali: 1.933 -> "1.93" / "1,93". */
+  factor(value: number | null | undefined): string;
   /** 0.35 -> "35%". */
   percent(fraction: number | null | undefined): string;
   /** Rapporto con segno: 1.8 -> "+80%", 0.6 -> "-40%". */
@@ -33,6 +35,10 @@ export function createFormatters(locale: Locale): Formatters {
   const tag = INTL_TAG[locale];
   const integer = new Intl.NumberFormat(tag, { maximumFractionDigits: 0, useGrouping: 'always' });
   const oneDecimal = new Intl.NumberFormat(tag, { maximumFractionDigits: 1 });
+  const twoDecimals = new Intl.NumberFormat(tag, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   const longMonth = new Intl.DateTimeFormat(tag, { month: 'long', timeZone: 'UTC' });
   const shortMonth = new Intl.DateTimeFormat(tag, { month: 'short', timeZone: 'UTC' });
   const firstOfMonth = (month: number) => new Date(Date.UTC(2000, month - 1, 1));
@@ -51,6 +57,8 @@ export function createFormatters(locale: Locale): Formatters {
     },
 
     decimal: (value) => (value == null ? EM_DASH : oneDecimal.format(value)),
+
+    factor: (value) => (value == null ? EM_DASH : twoDecimals.format(value)),
 
     percent: (fraction) =>
       fraction == null ? EM_DASH : `${integer.format(Math.round(fraction * 100))}%`,

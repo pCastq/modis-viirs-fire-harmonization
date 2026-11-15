@@ -30,6 +30,7 @@ export function installFakeApi(override: Override = () => undefined): RecordedCa
       calls.push(call);
       const custom = override(call);
       if (custom) return custom;
+      if (path.startsWith('/api/v1/harmonization?')) return json(fixtures.harmonization);
       switch (path) {
         case '/api/v1/metadata':
           return json(fixtures.metadata);
