@@ -2,8 +2,12 @@ package org.firecal.query;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import java.time.YearMonth;
+import java.util.List;
 import org.firecal.PostgisTestConfig;
 import org.firecal.aggregation.CellBuilder;
 import org.firecal.aggregation.CellDayBuilder;
@@ -15,20 +19,26 @@ import org.firecal.domain.ConfidenceClass;
 import org.firecal.domain.DayNightFilter;
 import org.firecal.domain.Satellite;
 import org.firecal.domain.SourceTypeFilter;
+import org.firecal.domain.harmonization.CountryKMethod;
+import org.firecal.domain.harmonization.KResolution;
+import org.firecal.domain.harmonization.SatelliteGroup;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Calibrazione e metodo {@code country-month-k} contro un PostGIS vero, con i dati sintetici di {@code CalendarServiceIT}:
+ * Calibrazione e metodo {@code country-quarter-k} contro un PostGIS vero, con i dati sintetici di {@code CalendarServiceIT}:
  * Italia, gennaio-marzo 2019; S-NPP 10 celle al giorno, Aqua 2, Terra 1. Solo gennaio e' completo per tutti, quindi e' l'unico
  * mese che entra nella calibrazione: k(Terra+Aqua) = 310 / 93.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @Import(PostgisTestConfig.class)
 class HarmonizationIT {
 
@@ -46,6 +56,8 @@ class HarmonizationIT {
   @Autowired HarmonizationCalibrator calibrator;
   @Autowired CalibrationService calibrationService;
   @Autowired CalendarService calendar;
+  @Autowired MockMvc mvc;
+  @Autowired MethodRegistry registry;
 
   private int italyId;
   private String originalMethod;
@@ -66,7 +78,7 @@ class HarmonizationIT {
     cellBuilder.addAllCells();
     pyramidBuilder.rebuildAll(2);
     coverageService.rebuildObservationDays();
-    jdbc.update("UPDATE app_setting SET value = 'country-month-k@1' WHERE name = 'active_method'");
+    jdbc.update("UPDATE app_setting SET value = 'country-quarter-k@1' WHERE name = 'active_method'");
     calibrator.calibrate(YearMonth.of(2019, 1), YearMonth.of(2019, 3));
     calibrationService.reload();
   }
@@ -127,9 +139,9 @@ class HarmonizationIT {
   // ---- il metodo sul calendario ----
 
   @Test
-  void aCountryIsHarmonizedWithItsOwnMonthlyK() throws Exception {
+  void aCountryIsHarmonizedWithItsOwnQuarterlyK() throws Exception {
     var data = calendar.calendar(query(AreaSpec.ofCountry("Italy")));
-    assertThat(data.method().toString()).isEqualTo("country-month-k@1");
+    assertThat(data.method().toString()).isEqualTo("country-quarter-k@1");
     // gennaio: VIIRS 310 e MODIS 93 x k = 310 concordano
     assertThat(data.harmonized().get(JAN).value()).isCloseTo(310.0, within(1e-6));
     assertThat(data.usedSatellites().get(JAN)).containsExactlyInAnyOrder(Satellite.SNPP, Satellite.AQUA, Satellite.TERRA);
@@ -139,7 +151,7 @@ class HarmonizationIT {
   @Test
   void monthsWithoutAStratumFallBackToTheCoarserKAndAreStillDeclared() throws Exception {
     var data = calendar.calendar(query(AreaSpec.ofCountry("Italy")));
-    // febbraio: S-NPP a meta' (escluso), Aqua 56 + Terra 28 = 84 x k globale (nessuno strato per febbraio)
+    // febbraio: S-NPP a meta' (escluso), Aqua 56 + Terra 28 = 84 x k del trimestre gen-mar (solo gennaio e' calibrato)
     assertThat(data.usedSatellites().get(FEB)).containsExactlyInAnyOrder(Satellite.AQUA, Satellite.TERRA);
     assertThat(data.harmonized().get(FEB).value()).isCloseTo(84 * K, within(1e-6));
     // marzo e' incompleto ma ha comunque un valore, marcato come tale
@@ -155,6 +167,43 @@ class HarmonizationIT {
     assertThat(data.rawBySatellite().get(JAN)).containsEntry(Satellite.SNPP, 310);
     assertThat(data.harmonized().get(JAN).value()).isCloseTo(310.0, within(1e-6)); // k locale del blocco = 310 / 93
     assertThat(data.harmonized().get(FEB).value()).isCloseTo(84 * K, within(1e-6));
+  }
+
+  // ---- la trasparenza: i k che il metodo usa davvero ----
+
+  private List<Object> field(String json, int quarter, String dayNight, String field) {
+    return JsonPath.read(json, "$.factors[?(@.quarter==" + quarter + " && @.dayNight=='" + dayNight + "')]." + field);
+  }
+
+  @Test
+  void theHarmonizationEndpointShowsTheKTheMethodApplies() throws Exception {
+    String json = mvc.perform(get("/api/v1/harmonization").param("boundaryCode", "Italy"))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString();
+    assertThat(JsonPath.<String>read(json, "$.calibration.from")).isEqualTo("2019-01");
+    assertThat(JsonPath.<Integer>read(json, "$.calibration.monthsUsed")).isEqualTo(1);
+    // gennaio-marzo: solo gennaio e' calibrato (310 celle-giorno VIIRS contro 93 di Terra+Aqua) e il paese ha dati propri
+    assertThat(((Number) field(json, 1, "ANY", "k").get(0)).doubleValue()).isCloseTo(K, within(1e-9));
+    assertThat(field(json, 1, "ANY", "source")).containsExactly("COUNTRY");
+    assertThat(((Number) field(json, 1, "ANY", "viirsCellDays").get(0)).longValue()).isEqualTo(310);
+    assertThat(((Number) field(json, 1, "ANY", "modisCellDays").get(0)).longValue()).isEqualTo(93);
+    // aprile-giugno non ha dati per l'Italia: il metodo scende a tutta la calibrazione, e l'API lo dice
+    assertThat(((Number) field(json, 2, "ANY", "k").get(0)).doubleValue()).isCloseTo(K, within(1e-9));
+    assertThat(field(json, 2, "ANY", "source")).containsExactly("GLOBAL");
+    // i dati sintetici hanno solo passaggi diurni: di notte non c'e' nessun k
+    assertThat(field(json, 1, "NIGHT", "k")).containsExactly((Object) null);
+  }
+
+  @Test
+  void theEndpointAndTheCalendarUseTheSameK() throws Exception {
+    var info = registryK(KResolution.QUARTER).countryFactor("Italy", 1, SatelliteGroup.TERRA_AQUA, COUNTER).orElseThrow();
+    var data = calendar.calendar(query(AreaSpec.ofCountry("Italy")));
+    assertThat(info.k()).isCloseTo(K, within(1e-9));
+    assertThat(data.harmonized().get(JAN).value()).isCloseTo(93 * info.k(), within(1e-6)); // MODIS x k = VIIRS (310)
+  }
+
+  private CountryKMethod registryK(KResolution resolution) {
+    return registry.countryK(resolution);
   }
 
   private long[] longs(String sql) {

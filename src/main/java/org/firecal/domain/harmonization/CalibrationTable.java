@@ -1,5 +1,6 @@
 package org.firecal.domain.harmonization;
 
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -8,69 +9,77 @@ import java.util.Optional;
  * Le somme di calibrazione per strato, da cui il metodo ricava i k. Immutabile; si costruisce con {@link Builder}
  * (dal job di calibrazione, che legge gli aggregati, o dai test).
  *
- * <p>Gli strati, dal piu' fine al piu' grosso: blocco 2 gradi x trimestre; paese x mese dell'anno; paese x trimestre;
- * tutta la regione x mese; tutto. Ogni strato e' per gruppo di satelliti ({@link SatelliteGroup}) e per contatore (il
- * filtro: sorgente x giorno/notte x confidenza, vedi {@code CellDayFlags.counterIndex}), cosi' ogni filtro e'
- * calibrato con i suoi dati.
+ * <p>Gli strati, dal piu' fine al piu' grosso: blocco 2 gradi x trimestre; paese x periodo (mese o trimestre, vedi
+ * {@link KResolution}); tutta la regione x periodo; tutto. Ogni strato e' per gruppo di satelliti ({@link
+ * SatelliteGroup}) e per contatore (il filtro: sorgente x giorno/notte x confidenza, vedi {@code
+ * CellDayFlags.counterIndex}), cosi' ogni filtro e' calibrato con i suoi dati.
+ *
+ * <p>Si conservano le somme per paese e mese dell'anno; i trimestri e la regione si ricavano sommando, una volta, alla
+ * costruzione.
  */
 public final class CalibrationTable {
 
-  private record CountryKey(String country, int month, SatelliteGroup group, int counter) {}
+  private record CountryKey(String country, int period, SatelliteGroup group, int counter) {}
+
+  private record RegionKey(int period, SatelliteGroup group, int counter) {}
+
+  private record GlobalKey(SatelliteGroup group, int counter) {}
 
   private record BlockKey(int blat, int blon, int quarter, SatelliteGroup group, int counter) {}
 
   private record BlockId(int blat, int blon) {}
 
-  private final Map<CountryKey, Stratum> countryMonth;
+  private final Map<CountryKey, Stratum> countryMonthSums;
   private final Map<BlockKey, Stratum> blocks;
   private final Map<BlockId, String> blockCountry;
-  private final Map<Integer, Map<SatelliteGroup, Map<Integer, Stratum>>> regionMonth = new HashMap<>();
-  private final Map<CountryKey, Stratum> countryQuarter = new HashMap<>();
-  private final Map<SatelliteGroup, Map<Integer, Stratum>> global = new HashMap<>();
+  private final Map<KResolution, Map<CountryKey, Stratum>> countries = new EnumMap<>(KResolution.class);
+  private final Map<KResolution, Map<RegionKey, Stratum>> regions = new EnumMap<>(KResolution.class);
+  private final Map<GlobalKey, Stratum> global = new HashMap<>();
 
   private CalibrationTable(
-      Map<CountryKey, Stratum> countryMonth, Map<BlockKey, Stratum> blocks, Map<BlockId, String> blockCountry) {
-    this.countryMonth = Map.copyOf(countryMonth);
+      Map<CountryKey, Stratum> countryMonthSums, Map<BlockKey, Stratum> blocks, Map<BlockId, String> blockCountry) {
+    this.countryMonthSums = Map.copyOf(countryMonthSums);
     this.blocks = Map.copyOf(blocks);
     this.blockCountry = Map.copyOf(blockCountry);
-    for (Map.Entry<CountryKey, Stratum> e : this.countryMonth.entrySet()) {
-      CountryKey k = e.getKey();
-      Stratum s = e.getValue();
-      regionMonth
-          .computeIfAbsent(k.month(), m -> new HashMap<>())
-          .computeIfAbsent(k.group(), g -> new HashMap<>())
-          .merge(k.counter(), s, Stratum::plus);
-      countryQuarter.merge(new CountryKey(k.country(), quarterOf(k.month()), k.group(), k.counter()), s, Stratum::plus);
-      global.computeIfAbsent(k.group(), g -> new HashMap<>()).merge(k.counter(), s, Stratum::plus);
+    for (KResolution resolution : KResolution.values()) {
+      countries.put(resolution, new HashMap<>());
+      regions.put(resolution, new HashMap<>());
+    }
+    for (Map.Entry<CountryKey, Stratum> e : this.countryMonthSums.entrySet()) {
+      accumulate(e.getKey(), e.getValue());
     }
   }
 
-  public static int quarterOf(int monthOfYear) {
-    return (monthOfYear - 1) / 3 + 1;
+  private void accumulate(CountryKey monthKey, Stratum sum) {
+    for (KResolution resolution : KResolution.values()) {
+      int period = resolution.period(monthKey.period());
+      countries.get(resolution)
+          .merge(new CountryKey(monthKey.country(), period, monthKey.group(), monthKey.counter()), sum, Stratum::plus);
+      regions.get(resolution).merge(new RegionKey(period, monthKey.group(), monthKey.counter()), sum, Stratum::plus);
+    }
+    global.merge(new GlobalKey(monthKey.group(), monthKey.counter()), sum, Stratum::plus);
   }
 
   public boolean isEmpty() {
-    return countryMonth.isEmpty();
+    return countryMonthSums.isEmpty();
   }
 
-  /** Paese x mese dell'anno (il livello del metodo per i paesi). */
-  public Optional<Stratum> countryMonth(String country, int monthOfYear, SatelliteGroup group, int counter) {
-    return Optional.ofNullable(countryMonth.get(new CountryKey(country, monthOfYear, group, counter)));
+  /** Un paese, nel periodo (mese o trimestre) che contiene il mese dell'anno indicato. */
+  public Optional<Stratum> country(
+      String country, KResolution resolution, int monthOfYear, SatelliteGroup group, int counter) {
+    return Optional.ofNullable(
+        countries.get(resolution).get(new CountryKey(country, resolution.period(monthOfYear), group, counter)));
   }
 
-  /** Paese x trimestre: la somma dei tre mesi, meno rumorosa. */
-  public Optional<Stratum> countryQuarter(String country, int quarter, SatelliteGroup group, int counter) {
-    return Optional.ofNullable(countryQuarter.get(new CountryKey(country, quarter, group, counter)));
-  }
-
-  /** Tutti i paesi, in quel mese dell'anno. */
-  public Optional<Stratum> regionMonth(int monthOfYear, SatelliteGroup group, int counter) {
-    return Optional.ofNullable(regionMonth.getOrDefault(monthOfYear, Map.of()).getOrDefault(group, Map.of()).get(counter));
+  /** Tutti i paesi insieme, nel periodo che contiene il mese dell'anno indicato. */
+  public Optional<Stratum> region(KResolution resolution, int monthOfYear, SatelliteGroup group, int counter) {
+    return Optional.ofNullable(
+        regions.get(resolution).get(new RegionKey(resolution.period(monthOfYear), group, counter)));
   }
 
   /** Tutta la calibrazione, senza distinzione di paese e di mese. */
   public Optional<Stratum> global(SatelliteGroup group, int counter) {
-    return Optional.ofNullable(global.getOrDefault(group, Map.of()).get(counter));
+    return Optional.ofNullable(global.get(new GlobalKey(group, counter)));
   }
 
   /** Blocco 2 gradi x trimestre (il livello del metodo per le aree piu' piccole di un paese). */
@@ -88,15 +97,16 @@ public final class CalibrationTable {
   }
 
   public static final class Builder {
-    private final Map<CountryKey, Stratum> countryMonth = new HashMap<>();
+    private final Map<CountryKey, Stratum> countryMonthSums = new HashMap<>();
     private final Map<BlockKey, Stratum> blocks = new HashMap<>();
     private final Map<BlockId, String> blockCountry = new HashMap<>();
 
+    /** Somme di un paese in un mese dell'anno: e' l'unita' da cui si ricavano trimestri e regione. */
     public Builder countryMonth(String country, int monthOfYear, SatelliteGroup group, int counter, long viirs, long old) {
       if (monthOfYear < 1 || monthOfYear > 12) {
         throw new IllegalArgumentException("Mese non valido: " + monthOfYear);
       }
-      countryMonth.merge(new CountryKey(country, monthOfYear, group, counter), new Stratum(viirs, old), Stratum::plus);
+      countryMonthSums.merge(new CountryKey(country, monthOfYear, group, counter), new Stratum(viirs, old), Stratum::plus);
       return this;
     }
 
@@ -114,7 +124,7 @@ public final class CalibrationTable {
     }
 
     public CalibrationTable build() {
-      return new CalibrationTable(countryMonth, blocks, blockCountry);
+      return new CalibrationTable(countryMonthSums, blocks, blockCountry);
     }
   }
 }

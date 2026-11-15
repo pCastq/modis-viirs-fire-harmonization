@@ -15,7 +15,6 @@ import org.firecal.query.AreaResolver;
 import org.firecal.query.AreaSpec;
 import org.firecal.query.CalendarService;
 import org.firecal.query.DetailService;
-import org.firecal.query.InvalidAreaException;
 import org.firecal.query.MethodRegistry;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -104,12 +103,7 @@ public class MetadataController {
   @GetMapping("/boundaries/{code}")
   @Operation(summary = "Una area", description = "Il rettangolo limite di un paese. La geometria dei confini non e' disponibile: servono confini amministrativi non ancora caricati.")
   public ResponseEntity<BoundaryInfo> boundary(@PathVariable String code) {
-    AreaResolver.Resolved box;
-    try {
-      box = resolver.resolve(AreaSpec.ofCountry(code));
-    } catch (InvalidAreaException e) {
-      throw e;
-    }
+    AreaResolver.Resolved box = resolver.resolve(AreaSpec.ofCountry(code));
     return ResponseEntity.ok(new BoundaryInfo(code, code.replace('_', ' '), "country", box.west(), box.south(), box.east(), box.north()));
   }
 }

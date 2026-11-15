@@ -60,11 +60,11 @@ I CSV FIRMS restano fuori dal database (`firecal.ingest.root`). Sotto la cartell
 ## API REST
 
 Avvio: `./mvnw spring-boot:run` (porta 8080). Documentazione interattiva: `/swagger-ui.html`; contratto: `/v3/api-docs`.
-Endpoint principali (tutti sotto `/api/v1`): `POST calendar`, `anomaly`, `seasonal-profile`, `annual-trend`, `month-detail`, `hotspots`, `export/hotspots.csv`, `export/monthly.csv`; `GET metadata`, `boundaries`.
+Endpoint principali (tutti sotto `/api/v1`): `POST calendar`, `anomaly`, `seasonal-profile`, `annual-trend`, `month-detail`, `hotspots`, `export/hotspots.csv`, `export/monthly.csv`; `GET metadata`, `boundaries`, `harmonization`.
 Esempio: `curl -H "Content-Type: application/json" -d '{"boundaryCode":"Italy"}' localhost:8080/api/v1/calendar`
-Il metodo di armonizzazione attivo e' in `app_setting.active_method` (oggi `fixed-factor@1`, provvisorio).
+Il metodo di armonizzazione attivo e' in `app_setting.active_method` (`country-quarter-k@1` dopo la calibrazione).
 
-## Armonizzazione (metodo `country-month-k@1`)
+## Armonizzazione (metodo `country-quarter-k@1`)
 
 Dopo il caricamento (`firecal.ingest.root`) e la ricostruzione (`firecal.rebuild.all=true`), si calibra e si attiva il metodo:
 
@@ -72,13 +72,16 @@ Dopo il caricamento (`firecal.ingest.root`) e la ricostruzione (`firecal.rebuild
 # file per rettangolo (NOAA-21 da FIRMS, scaricati con scripts/firms/download_noaa21.py): il paese viene dalla cella
 java -jar target/fire-calendar-0.1.0-SNAPSHOT.jar --spring.main.web-application-type=none   --firecal.ingest.root="<cartella>/full extraction" --firecal.ingest.sources=viirs-noaa21-sp
 java -jar target/fire-calendar-0.1.0-SNAPSHOT.jar --spring.main.web-application-type=none --firecal.rebuild.from=2023-03 --firecal.rebuild.to=2025-12
-# calibrazione sul 2013-2021 (somme per paese x mese x filtro e per blocco 2 gradi) e attivazione del metodo
+# calibrazione sul 2012-2018 (k per paese x trimestre x giorno/notte e per blocco 2 gradi) e attivazione del metodo
 java -jar target/fire-calendar-0.1.0-SNAPSHOT.jar --spring.main.web-application-type=none --firecal.calibrate=true
-# prova leave-one-year-out con il codice vero (non scrive nulla)
+# prova d'esame con il codice vero (non scrive nulla): leave-one-year-out e calibrazione 2012-2018 contro 2019-2024
 java -jar target/fire-calendar-0.1.0-SNAPSHOT.jar --spring.main.web-application-type=none --firecal.calibrate=true --firecal.calibrate.validate-only=true
 ```
 
-Il metodo, la sua misura e i limiti sono in `docs/ANALISI_ARMONIZZAZIONE.md`; la sua incertezza per livello di conteggio e' in ogni mese del calendario (`uncertainty`).
+Cosa fa il metodo, quanto sbaglia e cosa non fa: [docs/ARMONIZZAZIONE_PAESE_TRIMESTRE.md](docs/ARMONIZZAZIONE_PAESE_TRIMESTRE.md)
+(il confronto fra molti metodi e' in `docs/ANALISI_ARMONIZZAZIONE.md`). L'incertezza di ogni mese e' nel calendario (`uncertainty`);
+i k realmente usati per un paese sono in `GET /api/v1/harmonization?boundaryCode=Argentina` e nel pannello "Come MODIS e VIIRS diventano
+confrontabili" della dashboard.
 
 ## Lingue dell'API
 

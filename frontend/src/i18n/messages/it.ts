@@ -229,5 +229,31 @@ export const it: EnglishMessages = {
     hotspotsOf: 'Hotspot di {month}',
     tooLargeHint: ' Restringi l’area o il periodo, oppure scarica un mese alla volta.',
   },
+  harmonization: {
+    title: 'Come MODIS e VIIRS diventano confrontabili',
+    subtitle: 'I moltiplicatori (k) usati per {area}',
+    intro:
+      'MODIS (Terra e Aqua) vede meno celle attive di VIIRS. Per confrontarli, ogni cella-giorno MODIS è moltiplicata per k: il numero di celle-giorno VIIRS viste per ognuna di MODIS nello stesso paese, trimestre dell’anno e momento della giornata. VIIRS è usato così com’è.',
+    tableCaption: 'Moltiplicatore k per trimestre e momento della giornata',
+    quarter: 'Trimestre',
+    quarterRange: '{from}–{to}',
+    all: 'Tutto il giorno',
+    day: 'Giorno',
+    night: 'Notte',
+    cellTitle: '{viirs} celle-giorno VIIRS e {modis} MODIS',
+    borrowedRegion: 'Troppi pochi dati in questo trimestre: k viene da tutti i paesi insieme',
+    borrowedGlobal: 'Troppi pochi dati in questo trimestre: k viene dall’intera calibrazione',
+    borrowedFootnote:
+      'Valori contrassegnati: troppi pochi dati nel paese in quel trimestre, quindi k viene da tutti i paesi insieme o dall’intera calibrazione. Passa il cursore su un valore per i dettagli.',
+    notCalibrated: 'non calibrato',
+    calibration: 'Calibrato su {from} – {to} ({months} mesi completi). Metodo {method}.',
+    noCalibration: 'Nessuna calibrazione: i conteggi MODIS sono mostrati così come sono.',
+    unitNote:
+      'k conta celle-giorno (una cella da 0,01° attiva in un giorno), non hotspot grezzi: il rapporto fra i conteggi grezzi di hotspot è più alto.',
+    bandsTitle: 'Incertezza dichiarata di un mese, per dimensione del conteggio MODIS',
+    bandLabel: '{level} celle-giorno',
+    freeArea:
+      'Un’area disegnata non ha un moltiplicatore unico: il metodo usa uno locale per ogni blocco di 2 gradi, tirato verso quello del paese quando il blocco ha pochi dati. Scegli un paese per vedere i suoi moltiplicatori.',
+  },
   notes: { title: 'Come leggere questi dati' },
 };

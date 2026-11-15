@@ -11,6 +11,13 @@ describe('formatters', () => {
     expect(fmtIt.count(12.6)).toBe('13');
   });
 
+  it('writes the harmonization multiplier with two decimals and the separator of the language', () => {
+    expect(fmtEn.factor(1.933)).toBe('1.93');
+    expect(fmtIt.factor(1.933)).toBe('1,93');
+    expect(fmtEn.factor(3)).toBe('3.00');
+    expect(fmtEn.factor(null)).toBe(EM_DASH);
+  });
+
   it('shows "no data" as a dash, never as zero', () => {
     expect(fmtEn.count(null)).toBe(EM_DASH);
     expect(fmtIt.compact(undefined)).toBe(EM_DASH);

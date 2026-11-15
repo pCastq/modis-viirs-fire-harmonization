@@ -42,6 +42,28 @@ function useRead<T>(name: string, request: AreaRequest | null, pick: (api: Api) 
   });
 }
 
+/**
+ * I moltiplicatori k di un paese. Un'area disegnata non ha un k unico (il metodo usa k locali per blocchi di 2 gradi):
+ * per lei non si chiede nulla.
+ */
+export function useHarmonization(query: SearchQuery) {
+  const { api, language } = useApi();
+  const { area, filters } = query;
+  const country = area.kind === 'country' ? area.code : null;
+  return useQuery({
+    queryKey: ['harmonization', language, country, filters.sourceType, filters.minConfidence],
+    queryFn: ({ signal }) =>
+      api.harmonization(
+        country as string,
+        { sourceType: filters.sourceType, minConfidence: filters.minConfidence },
+        signal,
+      ),
+    enabled: country !== null,
+    staleTime: HOUR,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useCalendar(query: SearchQuery) {
   return useRead('calendar', toRequest(query), (api) => api.calendar);
 }

@@ -1,6 +1,8 @@
 package org.firecal.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -390,6 +392,37 @@ class ApiIT {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.west").isNumber());
     mvc.perform(get("/api/v1/boundaries/Atlantide")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void harmonizationWithoutCalibrationShowsNoKAndSaysSo() throws Exception {
+    mvc.perform(get("/api/v1/harmonization").param("boundaryCode", "Italy"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.method.id").value("country-quarter-k"))
+        .andExpect(jsonPath("$.area").value("Italy"))
+        .andExpect(jsonPath("$.calibration").value(nullValue()))
+        .andExpect(jsonPath("$.factors.length()").value(12)) // 4 trimestri x (qualsiasi ora, giorno, notte)
+        .andExpect(jsonPath("$.factors[0].k").value(nullValue()))
+        .andExpect(jsonPath("$.uncertaintyBands.length()").value(6))
+        .andExpect(jsonPath("$.notes[0]").value(containsString("No calibration")));
+  }
+
+  @Test
+  void harmonizationNotesComeInTheRequestedLanguage() throws Exception {
+    mvc.perform(get("/api/v1/harmonization").param("boundaryCode", "Italy").header("Accept-Language", "it"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.notes[0]").value(containsString("Non è ancora stata calcolata")));
+  }
+
+  @Test
+  void harmonizationOfAnUnknownCountryIsNotFound() throws Exception {
+    mvc.perform(get("/api/v1/harmonization").param("boundaryCode", "Atlantis")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void harmonizationRejectsAnInvalidFilter() throws Exception {
+    mvc.perform(get("/api/v1/harmonization").param("boundaryCode", "Italy").param("sourceType", "nope"))
+        .andExpect(status().isBadRequest());
   }
 
   @Test

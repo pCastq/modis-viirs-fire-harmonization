@@ -8,15 +8,23 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import org.firecal.api.ApiDtos.AreaInfo;
+import org.firecal.api.ApiDtos.BandDto;
 import org.firecal.api.ApiDtos.CalendarResponse;
+import org.firecal.api.ApiDtos.CalibrationDto;
+import org.firecal.api.ApiDtos.FactorDto;
 import org.firecal.api.ApiDtos.FilterInfo;
+import org.firecal.api.ApiDtos.HarmonizationResponse;
 import org.firecal.api.ApiDtos.MethodInfo;
+import org.firecal.domain.ConfidenceClass;
 import org.firecal.domain.MonthlyValue;
 import org.firecal.domain.Satellite;
 import org.firecal.domain.SourceTypeFilter;
+import org.firecal.domain.harmonization.KResolution;
+import org.firecal.domain.harmonization.CountryKMethod;
 import org.firecal.domain.harmonization.MethodRef;
 import org.firecal.query.AreaResolver;
 import org.firecal.query.CalendarService;
+import org.firecal.query.HarmonizationInfoService;
 import org.springframework.stereotype.Component;
 
 /** Costruisce le parti comuni delle risposte: area, metodo, filtri, avvertenze e la matrice del calendario. */
@@ -37,6 +45,13 @@ public class PayloadBuilder {
 
   private final ApiMessages messages;
 
+  /** Per ogni metodo, la chiave del testo che ne spiega i limiti. */
+  private static final Map<String, String> METHOD_NOTES = Map.of(
+      "fixed-factor", "note.methodProvisional",
+      "raw-sum", "note.methodRaw",
+      KResolution.MONTH.methodId(), "note.methodCountryMonthK",
+      KResolution.QUARTER.methodId(), "note.methodCountryQuarterK");
+
   public PayloadBuilder(ApiMessages messages) {
     this.messages = messages;
   }
@@ -44,13 +59,9 @@ public class PayloadBuilder {
   /** Avvertenze da mostrare insieme ai numeri, nella lingua della richiesta: chi le legge non deve fraintendere. */
   public List<String> notes(CalendarService.CalendarData data, SourceTypeFilter sourceType) {
     List<String> notes = new ArrayList<>();
-    String method = data.method().toString();
-    if (data.method().id().equals("fixed-factor")) {
-      notes.add(messages.text("note.methodProvisional", method));
-    } else if (data.method().id().equals("country-month-k")) {
-      notes.add(messages.text("note.methodCountryMonthK", method));
-    } else if (data.method().id().equals("raw-sum")) {
-      notes.add(messages.text("note.methodRaw", method));
+    String methodNote = METHOD_NOTES.get(data.method().id());
+    if (methodNote != null) {
+      notes.add(messages.text(methodNote, data.method().toString()));
     }
     switch (data.resolution()) {
       case "0.1" -> notes.add(messages.text("note.resolutionPyramid"));
@@ -142,5 +153,23 @@ public class PayloadBuilder {
 
   private static boolean inRange(CalendarService.CalendarQuery q, YearMonth m) {
     return !m.isBefore(q.from()) && !m.isAfter(q.to());
+  }
+
+  /** I moltiplicatori k di un paese, con la loro origine e l'incertezza, nella lingua della richiesta. */
+  public HarmonizationResponse harmonization(
+      HarmonizationInfoService.Info info, SourceTypeFilter sourceType, ConfidenceClass minConfidence) {
+    List<FactorDto> factors = info.factors().stream()
+        .map(f -> new FactorDto(
+            f.quarter(), f.dayNight().name(), f.k().orElse(null), f.source().map(CountryKMethod.KSource::name).orElse(null),
+            f.viirsCellDays(), f.modisCellDays()))
+        .toList();
+    List<BandDto> bands = info.bands().stream().map(b -> new BandDto(b.level(), b.relativeUncertainty())).toList();
+    CalibrationDto calibration = info.calibration()
+        .map(c -> new CalibrationDto(c.from().toString(), c.to().toString(), c.monthsUsed()))
+        .orElse(null);
+    List<String> notes = new ArrayList<>();
+    notes.add(messages.text(calibration == null ? "note.harmonizationNoCalibration" : "note.harmonizationHowToRead"));
+    return new HarmonizationResponse(
+        method(info.method()), calibration, info.country(), "TERRA_AQUA", sourceType.name(), minConfidence.name(), factors, bands, notes);
   }
 }

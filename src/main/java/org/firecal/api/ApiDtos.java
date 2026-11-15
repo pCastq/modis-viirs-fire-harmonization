@@ -96,4 +96,29 @@ public final class ApiDtos {
       String defaultSourceType,
       Map<String, Object> limits,
       List<String> notes) {}
+
+  public record CalibrationDto(String from, String to, int monthsUsed) {}
+
+  /**
+   * @param quarter trimestre dell'anno (1 = gennaio-marzo)
+   * @param dayNight {@code ANY}, {@code DAY} o {@code NIGHT}
+   * @param k hotspot VIIRS per ogni hotspot MODIS (Terra+Aqua); {@code null} senza calibrazione
+   * @param source da quale livello viene k: {@code COUNTRY}, {@code REGION} (tutti i paesi) o {@code GLOBAL}
+   * @param viirsCellDays celle-giorno VIIRS da cui nasce k
+   * @param modisCellDays celle-giorno MODIS (Terra+Aqua) da cui nasce k
+   */
+  public record FactorDto(int quarter, String dayNight, Double k, String source, long viirsCellDays, long modisCellDays) {}
+
+  public record BandDto(String level, double relativeUncertainty) {}
+
+  public record HarmonizationResponse(
+      MethodInfo method,
+      CalibrationDto calibration,
+      String area,
+      String satelliteGroup,
+      String sourceType,
+      String minConfidence,
+      List<FactorDto> factors,
+      List<BandDto> uncertaintyBands,
+      List<String> notes) {}
 }
