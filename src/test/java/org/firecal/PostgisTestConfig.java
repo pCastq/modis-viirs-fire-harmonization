@@ -11,7 +11,7 @@ import org.testcontainers.utility.DockerImageName;
  * e riusa il contesto fra le classi di test che importano questa configurazione.
  */
 @TestConfiguration(proxyBeanMethods = false)
-class PostgisTestConfig {
+public class PostgisTestConfig {
 
   @Bean
   @ServiceConnection

@@ -452,3 +452,27 @@ prima di scrivere le tabelle. Punti che cambiano decisioni precedenti:
 
 Conseguenza sul riferimento: se S-NPP non produce piu' dati dal 2026-11-02, il metodo deve dichiarare come prosegue la scala
 (NOAA-20 con k ~ 1 verso S-NPP, "congelato" e con banda di incertezza): da studiare nello stesso piano.
+
+## 13. Caricamento, aggregazione, servizio di calendario e API (Step 18-24, 2026-11-15)
+
+**Fatto (tutto verificato: 356 test unitari + 99 di integrazione verdi, `./mvnw verify`).**
+
+- **Caricamento** (`org.firecal.ingestion`): un file per transazione, `COPY`, idempotenza con SHA-256, righe scartate in `ingest_reject` con il motivo; i conteggi quadrano sempre (letti = caricati + scartati + duplicati). Verificato contro una scansione indipendente dei CSV.
+- **Cella-giorno** (`cell_day`, partizionata per data solare, 0,01 gradi): 18 bit di `flags` (vegetazione/altre x qualsiasi/giorno/notte x tutte/nominale+/alta, cumulativi) -> 27 contatori. Il contatore "tutte le sorgenti" e' l'unione, non la somma dei due gruppi.
+- **Copertura** (`observation_day`): giorno OK / PARZIALE / MANCANTE; mese completo se il miglior satellite ha >= 80% di giorni OK; un satellite sotto l'80% e' escluso dall'armonizzazione di quel mese.
+- **Tre percorsi di interrogazione**: paese -> `boundary_month` (precalcolato); poligono piccolo (riquadro <= 4 gradi2) -> `cell_day` esatto; poligono grande -> piramide 0,1 gradi (bordo approssimato ~0,05 gradi). I tre percorsi danno lo stesso numero per tutti i 27 filtri (`PyramidIT`).
+- **API** `/api/v1`: `calendar`, `anomaly`, `seasonal-profile`, `annual-trend`, `month-detail`, `hotspots`, `export/hotspots.csv`, `export/monthly.csv` (POST); `metadata`, `boundaries`, `boundaries/{code}` (GET). Errori RFC 9457, ETag, CORS per Vite (5173), OpenAPI su `/v3/api-docs`, Swagger UI su `/swagger-ui.html`. Filtri di default: qualsiasi ora, confidenza nominale+, solo vegetazione, modalita' armonizzata.
+- **Export**: pre-controllo sulle celle-giorno -> 413 in 0,14 s (prima 42 s scansionando il grezzo); limite `firecal.export.max-rows`.
+- **Metodo attivo = `fixed-factor@1` (V8), PROVVISORIO.** Con `raw-sum` l'armonizzazione sarebbe invisibile. Dimostrazione (UC-3, Argentina, vegetazione): il trend annuale con somma grezza risultava in crescita artificiale (satelliti aggiunti nel tempo); con fixed-factor il trend e' in calo significativo (Sen -6.650/anno, p=0,0002, 23 anni). Il segno si inverte: e' la prova che l'armonizzazione serve; il valore dei fattori resta da studiare (PIANO_STUDIO_K).
+
+**Prestazioni misurate sui dati reali** (73 M righe): calendario di un paese < 0,1 s; poligoni < 1 s; rettangolo su tutto il Sud America 1,7 s.
+
+**Da verificare / debiti**
+1. Euristica dei giorni parziali: quanto spesso scatta sui dati reali.
+2. `provisional=false` finche' non sono caricati i dati NRT / 2026 (ultimi mesi oggi non marcati provvisori).
+3. Rettangolo su tutto il Sud America a 1,7 s: accettabile, da ricontrollare con piu' dati.
+4. Errore di bordo della piramide (~0,05 gradi) per poligoni grandi: va dichiarato in interfaccia.
+5. I fattori di `fixed-factor@1` sono globali: non distinguono regione, mese, giorno/notte.
+6. Province/regioni: servono poligoni amministrativi da scaricare (da concordare con l'utente prima di scaricare).
+7. `hotspot_raw` reale ~130 byte/riga (stima iniziale 99).
+8. NOAA-21 e 2026 non ancora caricati (richiede MAP_KEY FIRMS, a cura dell'utente).

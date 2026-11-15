@@ -45,3 +45,21 @@ Prova rapida:
 ```bash
 docker exec firecal-db psql -U firecal -d firecal -c "SELECT postgis_version();"
 ```
+
+## Caricamento dati e aggregazione
+
+I CSV FIRMS restano fuori dal database (`firecal.ingest.root`). Sotto la cartella alla radice: `modis/AAAA/modis_AAAA_Paese.csv`, `viirs-snpp/...`, ecc.
+
+```bash
+# carica i CSV (idempotente: un file gia' caricato viene saltato)
+./mvnw spring-boot:run -Dspring-boot.run.arguments="--firecal.ingest.root=<cartella>"
+# ricostruisce cella-giorno, celle, piramide, copertura
+./mvnw spring-boot:run -Dspring-boot.run.arguments="--firecal.rebuild.all=true"
+```
+
+## API REST
+
+Avvio: `./mvnw spring-boot:run` (porta 8080). Documentazione interattiva: `/swagger-ui.html`; contratto: `/v3/api-docs`.
+Endpoint principali (tutti sotto `/api/v1`): `POST calendar`, `anomaly`, `seasonal-profile`, `annual-trend`, `month-detail`, `hotspots`, `export/hotspots.csv`, `export/monthly.csv`; `GET metadata`, `boundaries`.
+Esempio: `curl -H "Content-Type: application/json" -d '{"boundaryCode":"Italy"}' localhost:8080/api/v1/calendar`
+Il metodo di armonizzazione attivo e' in `app_setting.active_method` (oggi `fixed-factor@1`, provvisorio).

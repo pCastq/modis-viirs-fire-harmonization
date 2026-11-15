@@ -22,6 +22,7 @@
   <properties>
     <java.version>21</java.version>
     <archunit.version>1.5.1</archunit.version>
+    <springdoc.version>3.1.1</springdoc.version>
   </properties>
 
   <dependencies>
@@ -47,16 +48,27 @@
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-database-postgresql</artifactId>
     </dependency>
+    <!-- Documentazione OpenAPI 3 generata dai controller (/v3/api-docs, /swagger-ui.html). -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
+    </dependency>
+    <!-- Compile (non solo runtime): il caricatore usa l'API COPY del driver. -->
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
-      <scope>runtime</scope>
     </dependency>
 
     <!-- Test: JUnit 5, AssertJ e Spring Test (starter-test), poi un PostGIS vero con Testcontainers. -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

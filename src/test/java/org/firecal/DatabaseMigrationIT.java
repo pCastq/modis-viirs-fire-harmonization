@@ -26,11 +26,12 @@ class DatabaseMigrationIT {
     assertThat(applied).isEqualTo(1);
   }
 
+  /** Dopo V8 il metodo attivo e' il segnaposto provvisorio; i test che lo cambiano devono ripristinarlo. */
   @Test
-  void theActiveMethodStartsAsRawSum() {
+  void theActiveMethodIsTheProvisionalFixedFactor() {
     String method =
         jdbc.queryForObject("SELECT value FROM app_setting WHERE name = 'active_method'", String.class);
-    assertThat(method).isEqualTo("raw-sum@1");
+    assertThat(method).isEqualTo("fixed-factor@1");
   }
 
   @Test
