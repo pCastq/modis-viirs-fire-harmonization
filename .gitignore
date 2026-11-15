@@ -16,3 +16,8 @@ __pycache__/
 
 # Copia duplicata di docs/analisi-armonizzazione
 analysis/out/
+
+# Local outputs of the validation scripts
+analysis/sa-validation/out/
+analysis/full/
+analysis/*.log

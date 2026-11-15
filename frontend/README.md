@@ -1,92 +1,63 @@
-# Front-end — Calendario degli incendi
+# Dashboard — Fire Calendar
 
-Dashboard React + TypeScript + Vite per il backend `firecal` (hotspot MODIS/VIIRS armonizzati).
-Risponde alle domande della sfida: _quali periodi dell'anno bruciano di più, quali anni sono stati peggiori,
-come si confronta il presente con il passato_, per un'area scelta dall'utente, con CSV scaricabili.
+React + TypeScript + Vite dashboard for the `firecal` backend (harmonized MODIS/VIIRS hotspots). It answers the challenge's questions:
+_which periods of the year burn the most, which years were worse, how does the present compare with the past_, for an area chosen by
+the user, with CSV downloads. In the Docker image it is built and served by the backend on port 8080 (see the main README).
 
-## Avvio
+## Run it for development
 
 ```bash
-# 1. backend (porta 8080) — vedi il README principale
-./mvnw spring-boot:run
-
-# 2. front-end (porta 5173; /api è inoltrato al backend)
-cd frontend
-npm install
-npm run dev
+docker compose up -d db && ./mvnw spring-boot:run   # backend on :8080 (from the repository root)
+cd frontend && npm install && npm run dev           # dashboard on :5173, /api is proxied to the backend
 ```
 
-Per puntare a un altro backend: `VITE_API_PROXY=http://host:porta npm run dev`.
+Another backend: `VITE_API_PROXY=http://host:port npm run dev`.
 
-| Comando                | Cosa fa                                  |
-| ---------------------- | ---------------------------------------- |
-| `npm run dev`          | server di sviluppo con ricarica a caldo  |
-| `npm run build`        | controllo dei tipi + build di produzione |
-| `npm test`             | test (Vitest + Testing Library)          |
-| `npm run lint`         | ESLint (tipi, hooks React)               |
-| `npm run format:check` | Prettier                                 |
+| Command | What it does |
+|---|---|
+| `npm run dev` | dev server with hot reload |
+| `npm run build` | type check + production build |
+| `npm test` | tests (Vitest + Testing Library) |
+| `npm run lint` | ESLint (types, React hooks) |
+| `npm run format:check` | Prettier |
 
-## Lingue (i18n)
+## What the dashboard does
 
-L'interfaccia è **in inglese per impostazione predefinita**, indipendentemente dalla lingua del browser; l'italiano è
-disponibile dal selettore in alto a destra. Ordine di scelta: `?lang=it` nell'URL (link condivisibile) → scelta salvata
-nel browser → inglese. Cambia anche `<html lang>` e il titolo della scheda.
+- **Where**: a country, an area **drawn** on the map (rectangle or polygon), or typed **coordinates**.
+- **When / what to count**: period, harmonized or raw, vegetation or all sources, day/night, confidence.
+- **Calendar**: years × months with an accessible colour ramp (ColorBrewer YlOrRd) and a "Versus typical" view (diverging PuOr). Colour is never the
+  only signal: every cell shows its number, incomplete months have a hatch and a "!", months with no data are hatched (never a zero).
+- **Indicators**: peak month, worst year, trend (Mann–Kendall / Sen), anomaly of the month against the other years, seasonal profile, annual totals with uncertainty.
+- **Harmonization panel**: the multipliers k used for the chosen country (per quarter and day/night), calibration years and uncertainty bands.
+- **Detail**: click a month for its days per satellite, click a day for the hotspots on the map. **Export**: CSV of monthly counts and of hotspots.
+- **Shareable**: the whole state (area, period, filters, month, day) lives in the URL.
 
-- `src/i18n/messages/en.ts` è il catalogo di riferimento; `it.ts` ha il tipo `EnglishMessages`, quindi una chiave mancante
-  o in più **non compila**. Un test controlla anche che i segnaposto (`{nome}`) coincidano fra le lingue.
-- Plurali con `{ one, other }` scelti da `count` secondo le regole della lingua (`Intl.PluralRules`).
-- Numeri, separatori e nomi dei mesi vengono da `Intl` con la lingua scelta; il formato compatto (`12,3K`) è proprio.
-- **Aggiungere una lingua**: una voce in `locales.ts`, un file `messages/<codice>.ts` del tipo `EnglishMessages`, e
-  la voce in `translate.ts`. Nessun componente va toccato.
-- **Testi del server** (note, errori, motivo dell'anomalia non disponibile): il front-end invia `Accept-Language` con la
-  lingua scelta e la mette nella chiave della cache, quindi cambiando lingua vengono riletti nella lingua nuova.
-  Il backend li traduce (vedi la sezione «Lingue» del README principale).
+## Languages
 
-## Cosa fa la dashboard
+English by default, Italian from the selector (`?lang=it` in the URL, then the saved choice, then English). `src/i18n/messages/en.ts` is the reference catalogue;
+`it.ts` has the same type, so a missing key does not compile. The server's notes and errors follow the same language (`Accept-Language`).
+To add a language: an entry in `locales.ts`, a `messages/<code>.ts` and its entry in `translate.ts`.
 
-- **Dove**: un paese dall'elenco, un'area **disegnata** sulla mappa (rettangolo o poligono) oppure **coordinate** digitate.
-- **Quando / cosa contare**: periodo, armonizzato o grezzo, vegetazione o tutte le sorgenti, giorno/notte, confidenza.
-- **Calendario**: anni × mesi, colorato con scala accessibile (ColorBrewer YlOrRd); vista «Rispetto al tipico»
-  (divergente PuOr). Il colore non è mai l'unica informazione: ogni cella ha il numero, i mesi incompleti hanno una
-  trama e un «!», i provvisori un bordo tratteggiato, i mesi senza dati un tratteggio (mai uno zero).
-- **Indicatori**: hotspot nel periodo, mese di picco, anno peggiore, tendenza (Mann-Kendall/Sen), anomalia del mese
-  contro gli altri anni, profilo stagionale (mediana e quartili per mese), totale annuale con incertezza.
-- **Dettaglio**: clic su un mese → giorni per satellite (con i giorni senza osservazione segnalati); clic su un giorno →
-  punti sulla mappa.
-- **Export**: CSV dei conteggi mensili e dei punti (periodo o mese scelto); l'errore «troppo grande» è spiegato.
-- **Condivisibile**: tutto lo stato (area, periodo, filtri, mese, giorno) è nell'URL.
-
-## Architettura
+## Structure
 
 ```
 src/
-  api/          contratto con il backend: tipi (types.ts), HTTP + errori (client.ts), un metodo per endpoint
-  domain/       logica pura, senza React né DOM: scale colore, modello del calendario, geometria,
-                disegno (macchina a stati), periodi, formati, anomalia, tendenza  → tutta testata
-  state/        stato dell'app = URL (urlState.ts puro; useAppState.ts è il solo punto con effetti)
-  hooks/        lettura dati con TanStack Query (queries.ts)
-  components/   primitive di UI senza conoscenza del dominio (Card, Notice, Segmented, QueryBoundary…)
-  features/     una cartella per area funzionale: search, calendar, insights, detail, export, status
-  test/         fixture e finto server (fakeApi) per i test d'integrazione
+  api/          backend contract: types, HTTP + errors, one method per endpoint
+  domain/       pure logic, no React or DOM: colour scales, calendar model, geometry, drawing state machine, periods, formats, anomaly, trend
+  state/        app state = the URL
+  hooks/        data fetching with TanStack Query
+  components/   UI primitives with no domain knowledge
+  features/     one folder per area: search, calendar, insights, detail, export, status
+  test/         fixtures and a fake server for the integration tests
 ```
 
-Regole che il codice rispetta:
+Rules the code follows: dependencies go one way (`features → hooks/state/components → domain/api`); the URL is the single source of truth for state; server data
+stays in the TanStack Query cache; no chart library (the charts are hand-written SVG/HTML on tested scales); accessibility (the calendar is a `role="grid"`
+with keyboard navigation, text/cell contrast ≥ 4.5:1 checked by a test, light/dark theme, reduced motion); transparency about the data (method, incomplete months and
+resolution are always visible).
 
-1. **Dipendenze in una direzione**: `features → hooks/state/components → domain/api`. Il dominio non importa React.
-2. **Una sola fonte di verità per lo stato**: l'URL. Cambiare area/periodo/filtri azzera il mese a fuoco.
-3. **Dati dal server nella cache di TanStack Query**, mai copiati in stati locali; gli errori 4xx non si ripetono.
-4. **Niente librerie di grafici**: i quattro grafici (profilo, trend, giorni, calendario) sono SVG/HTML scritti a mano
-   su scale testate (`domain/chartScale.ts`), per avere pieno controllo su accessibilità e aspetto.
-5. **Accessibilità**: calendario come `role="grid"` con frecce/Home/End, un solo tab stop, etichette per screen reader,
-   contrasto testo/cella ≥ 4,5:1 verificato da un test su ogni gradino delle scale, tema chiaro/scuro,
-   `prefers-reduced-motion`, link «Vai al calendario».
-6. **Trasparenza sul dato**: metodo provvisorio, mesi incompleti, risoluzione e note dell'API sono sempre visibili.
+## Good to know
 
-## Cose da sapere
-
-- Le mappe usano i tile pubblici di OpenStreetMap (attribuzione inclusa): richiedono rete. Per un uso intensivo serve
-  un fornitore di tile dedicato.
-- La vista «Rispetto al tipico» del calendario calcola la mediana per mese **sul calendario già scaricato** (solo
-  visualizzazione); il confronto formale con gli anni di riferimento è quello del backend (`/anomaly`).
-- I test non caricano Leaflet (richiede un layout reale): le mappe sono sostituite da segnaposto nei test
-  d'integrazione e verificate nel browser.
+- Maps use the public OpenStreetMap tiles (attribution included) and need a network connection.
+- The "Versus typical" view computes the per-month median on the calendar already downloaded (display only); the formal comparison is the backend's `/anomaly`.
+- Tests do not load Leaflet (it needs a real layout): maps are replaced by placeholders there and checked in the browser.

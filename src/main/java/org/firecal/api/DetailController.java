@@ -16,6 +16,7 @@ import org.firecal.api.ApiDtos.MonthDetailResponse;
 import org.firecal.domain.Satellite;
 import org.firecal.query.AreaResolver;
 import org.firecal.query.CalendarService;
+import org.firecal.query.DetailAvailability;
 import org.firecal.query.DetailService;
 import org.firecal.query.ExportTooLargeException;
 import org.springframework.http.HttpHeaders;
@@ -42,8 +43,10 @@ public class DetailController {
   private final RequestMapper mapper;
   private final PayloadBuilder builder;
   private final DataInfoService info;
+  private final DetailAvailability availability;
 
-  public DetailController(DetailService detail, CalendarService calendar, AreaResolver resolver, RequestMapper mapper, PayloadBuilder builder, DataInfoService info, ApiMessages messages) {
+  public DetailController(DetailService detail, CalendarService calendar, AreaResolver resolver, RequestMapper mapper, PayloadBuilder builder, DataInfoService info, DetailAvailability availability, ApiMessages messages) {
+    this.availability = availability;
     this.messages = messages;
     this.detail = detail;
     this.calendar = calendar;
@@ -143,6 +146,7 @@ public class DetailController {
   public ResponseEntity<StreamingResponseBody> exportHotspots(@RequestBody AreaRequest req) throws SQLException {
     CalendarService.CalendarQuery q = query(req);
     AreaResolver.Resolved area = resolver.resolve(q.area());
+    availability.require(area); // prima del controllo sulle dimensioni, che parte dal calendario
     // Controllo immediato: le righe del grezzo sono sempre almeno quante le celle-giorno (gia' in
     // millisecondi): se queste superano il limite si rifiuta senza scandire il grezzo.
     long cellDays = calendar.calendar(q).rawBySatellite().values().stream().flatMap(m -> m.values().stream()).mapToLong(Integer::longValue).sum();

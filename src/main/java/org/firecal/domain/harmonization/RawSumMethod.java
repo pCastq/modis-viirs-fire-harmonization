@@ -14,7 +14,8 @@ import java.util.OptionalDouble;
  */
 public final class RawSumMethod implements HarmonizationMethod {
 
-  private static final MethodRef REF = new MethodRef("raw-sum", "1");
+  /** Nome e versione del metodo: e' quello che si usa per mostrare i conteggi grezzi. */
+  public static final MethodRef REF = new MethodRef("raw-sum", "1");
 
   @Override
   public MethodRef ref() {

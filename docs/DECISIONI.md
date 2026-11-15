@@ -646,3 +646,24 @@ codice vero: `docs/ARMONIZZAZIONE_PAESE_TRIMESTRE.md`.
 2. Bande delle aree disegnate (blocchi): non ricalcolate con questa prova.
 3. Italia (e altri continenti): la prova qui e' solo sul Sud America; il salto del 2018 in Italia resta senza causa.
 4. Una pagina "Metodo" per esteso nella dashboard (oggi: pannello dei k + note) e la scelta di mostrare anche il conteggio grezzo di hotspot.
+
+## 20. Consegna: Docker, dataset di demo e correzione della modalita' Raw (2026-11-15)
+
+**Errore trovato:** la modalita' "Raw" non era mai stata realizzata. L'API restituiva sempre i valori armonizzati e scriveva "raw" nell'etichetta, e
+il frontend mostrava quello che riceveva: Raw e Harmonized risultavano identici. Ora `mode=RAW` usa il metodo `raw-sum@1` (somma dei conteggi senza
+correzioni) per calendario, anomalia, profilo e trend. Esempio, Argentina: gennaio 2001 vale 7.038 in Raw e 29.661 armonizzato (e' un anno di solo Terra);
+agosto 2013 vale 41.625 in Raw e 27.186 armonizzato (Raw somma anche VIIRS: il salto del 2012). Le etichette dicevano "hotspot": i numeri sono celle-giorno attive.
+
+**Consegna**
+- Un solo container per l'applicazione (il frontend e' compilato dentro il jar e servito da Spring Boot sulla 8080: niente proxy ne' CORS) piu' il database:
+  `docker compose up --build`. Il vecchio uso `docker compose up -d db` per sviluppare dall'IDE resta uguale.
+- **Dataset di demo** (`demo-data/firecal-demo.sql.gz`, 18 MB, caricato da PostgreSQL al primo avvio di un volume vuoto): il database vero pesa 19 GB (81 milioni di
+  hotspot). La demo ha i totali, la copertura e la calibrazione di **tutti** i 15 paesi (calendario, anomalie, trend, pannello dei k identici al database completo) e il
+  dettaglio (celle-giorno, hotspot grezzi, aree disegnate) solo per Uruguay, Suriname, Guyana Francese, Falkland e Guyana. Generato da
+  `scripts/demo/build-demo-dump.sh`.
+- `country.detail_loaded` (V10) e `DetailAvailability`: dove il dettaglio non c'e', l'API risponde 400 con un messaggio (`area.detailNotLoaded`,
+  `area.outsideLoadedDetail`) invece di zeri che sembrerebbero "nessun fuoco". Il database completo ha tutto a true e non cambia.
+- Il confine di un paese si ricava dalle sue celle: nella demo i paesi senza dettaglio tengono 4 celle (gli estremi) per non rompere lo zoom della mappa.
+
+**Limiti noti della demo:** i blocchi 0,1 gradi lungo i confini dei paesi con dettaglio contengono anche fuochi dei paesi vicini (la piramide non e' stata ricostruita);
+il lockfile del frontend, scritto su Windows, non basta a `npm ci` su Linux: l'immagine ripiega su `npm install`.

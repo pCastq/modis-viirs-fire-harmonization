@@ -125,6 +125,33 @@ class ApiIT {
   }
 
   @Test
+  void rawModeShowsTheSumOfTheCountsAndHarmonizedModeShowsTheMethodsValues() throws Exception {
+    setMethod("fixed-factor@1"); // Aqua x 4,5, Terra x 8,7: i valori armonizzati sono diversi dalla somma
+    String italy = "\"boundaryCode\":\"Italy\"";
+    mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{" + italy + ",\"mode\":\"RAW\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.mode").value("RAW"))
+        .andExpect(jsonPath("$.method.id").value("raw-sum"))
+        .andExpect(jsonPath("$.values[0][0]").value(403.0)); // 310 + 62 + 31, senza correzioni
+    mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{" + italy + ",\"mode\":\"HARMONIZED\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.mode").value("HARMONIZED"))
+        .andExpect(jsonPath("$.method.id").value("fixed-factor"))
+        .andExpect(jsonPath("$.values[0][0]").value(org.hamcrest.Matchers.not(403.0)));
+  }
+
+  @Test
+  void rawModeAppliesToTheIndicatorsToo() throws Exception {
+    setMethod("fixed-factor@1");
+    mvc.perform(post("/api/v1/annual-trend").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"mode\":\"RAW\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.method.id").value("raw-sum"));
+    mvc.perform(post("/api/v1/seasonal-profile").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\",\"mode\":\"RAW\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.method.id").value("raw-sum"));
+  }
+
+  @Test
   void theDefaultPeriodIsTheOneCoveredByTheData() throws Exception {
     mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\"}"))
         .andExpect(jsonPath("$.from").value("2019-01"))
@@ -423,6 +450,54 @@ class ApiIT {
   void harmonizationRejectsAnInvalidFilter() throws Exception {
     mvc.perform(get("/api/v1/harmonization").param("boundaryCode", "Italy").param("sourceType", "nope"))
         .andExpect(status().isBadRequest());
+  }
+
+  // ---- un database con il dettaglio solo per alcuni paesi (la demo consegnata) ----
+
+  private void detailLoaded(String country, boolean loaded) {
+    jdbc.update("UPDATE country SET detail_loaded = ? WHERE name = ?", loaded, country);
+  }
+
+  @Test
+  void aCountryWithoutDetailStillHasItsCalendarButSaysSoForTheDayByDayDetail() throws Exception {
+    detailLoaded("Italy", false);
+    try {
+      mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\"}"))
+          .andExpect(status().isOk());
+      mvc.perform(post("/api/v1/month-detail").contentType(MediaType.APPLICATION_JSON)
+              .content("{\"boundaryCode\":\"Italy\",\"year\":2019,\"month\":1}"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.detail").value(containsString("not included in this dataset")));
+      mvc.perform(post("/api/v1/export/hotspots.csv").contentType(MediaType.APPLICATION_JSON).content("{\"boundaryCode\":\"Italy\"}"))
+          .andExpect(status().isBadRequest());
+    } finally {
+      detailLoaded("Italy", true);
+    }
+  }
+
+  @Test
+  void aDrawnAreaOutsideTheCountriesWithDetailIsRefusedInsteadOfShowingZeros() throws Exception {
+    detailLoaded("Italy", false);
+    String polygon = "{\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[10.0,40.0],[10.02,40.0],[10.02,40.1],[10.0,40.1],[10.0,40.0]]]}}";
+    try {
+      mvc.perform(post("/api/v1/calendar").contentType(MediaType.APPLICATION_JSON).content(polygon))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.detail").value(containsString("outside the areas with detail")));
+    } finally {
+      detailLoaded("Italy", true);
+    }
+  }
+
+  @Test
+  void theDetailMessageIsTranslated() throws Exception {
+    detailLoaded("Italy", false);
+    try {
+      postIn("it", "/month-detail", "{\"boundaryCode\":\"Italy\",\"year\":2019,\"month\":1}")
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.detail").value(containsString("non sono inclusi")));
+    } finally {
+      detailLoaded("Italy", true);
+    }
   }
 
   @Test

@@ -1,36 +1,58 @@
-# Database di sviluppo: PostgreSQL 16 + PostGIS 3.4 (specifica, sezione 6.1).
+# Fire calendar: database (PostgreSQL 16 + PostGIS 3.4) and the application (API + dashboard in one image).
 #
-# Avvio:    docker compose up -d db
-# Stato:    docker compose ps        (attendere "healthy")
-# Stop:     docker compose down      (i dati restano nel volume)
-# Azzera:   docker compose down -v   (CANCELLA tutti i dati del database)
+# Run everything:   docker compose up --build        then open http://localhost:8080
+# Only the database (to develop the app from the IDE):   docker compose up -d db      (localhost:5433)
+# Status:           docker compose ps
+# Stop:             docker compose down      (the data stays in the volume)
+# Start over:       docker compose down -v   (also drops the database volume: the demo data is loaded again on the next start)
 #
-# Le credenziali sono SOLO per lo sviluppo locale. Si possono cambiare con variabili d'ambiente
-# o con un file .env (non versionato), per esempio FIRECAL_DB_PASSWORD.
+# On the first start of an EMPTY database, PostgreSQL loads demo-data/*.sql.gz (the demo dataset, see README). An existing
+# database (volume) is never touched. Credentials are for local use only: change them with the FIRECAL_DB_* variables or a
+# .env file (not versioned).
 
-# Nome fisso del progetto: senza, Compose usa il nome della cartella e lo stesso file lanciato da due
-# cartelle diverse (per esempio un worktree e il checkout principale) creerebbe due database separati.
+# Fixed project name: without it Compose would use the folder name, and the same file run from two folders
+# (for example a worktree and the main checkout) would create two separate databases.
 name: firecal
 
 services:
   db:
     image: postgis/postgis:16-3.4
-    container_name: firecal-db
     environment:
       POSTGRES_DB: ${FIRECAL_DB_NAME:-firecal}
       POSTGRES_USER: ${FIRECAL_DB_USER:-firecal}
       POSTGRES_PASSWORD: ${FIRECAL_DB_PASSWORD:-firecal}
     ports:
-      # Solo su localhost (la password di sviluppo e' debole) e sulla 5433, per non
-      # entrare in conflitto con un PostgreSQL gia' installato sulla 5432.
+      # Only on localhost (the development password is weak) and on 5433, to avoid clashing with a PostgreSQL on 5432.
       - "127.0.0.1:${FIRECAL_DB_PORT:-5433}:5432"
     volumes:
       - firecal-pgdata:/var/lib/postgresql/data
+      - ./demo-data:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # -h localhost: while the demo data is loading the server only listens on its socket, and must not look ready yet
+      test: ["CMD-SHELL", "pg_isready -h localhost -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 90
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      FIRECAL_DB_HOST: db
+      FIRECAL_DB_PORT: 5432
+      FIRECAL_DB_NAME: ${FIRECAL_DB_NAME:-firecal}
+      FIRECAL_DB_USER: ${FIRECAL_DB_USER:-firecal}
+      FIRECAL_DB_PASSWORD: ${FIRECAL_DB_PASSWORD:-firecal}
+    ports:
+      - "${FIRECAL_APP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080'"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
 
 volumes:
   firecal-pgdata:

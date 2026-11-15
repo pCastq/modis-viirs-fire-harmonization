@@ -101,8 +101,11 @@ public class CalendarService {
   private final AreaResolver resolver;
   private final CoverageService coverageService;
   private final MethodRegistry registry;
+  private final DetailAvailability availability;
 
-  public CalendarService(JdbcTemplate jdbc, AreaResolver resolver, CoverageService coverageService, MethodRegistry registry) {
+  public CalendarService(
+      JdbcTemplate jdbc, AreaResolver resolver, CoverageService coverageService, MethodRegistry registry, DetailAvailability availability) {
+    this.availability = availability;
     this.jdbc = jdbc;
     this.resolver = resolver;
     this.coverageService = coverageService;
@@ -114,9 +117,18 @@ public class CalendarService {
     return jdbc.queryForObject("SELECT value FROM app_setting WHERE name = 'active_method'", String.class);
   }
 
+  /** Il calendario con il metodo di armonizzazione attivo. */
   public CalendarData calendar(CalendarQuery q) throws SQLException {
+    return calendar(q, activeMethod());
+  }
+
+  /**
+   * Il calendario con un metodo scelto ({@code id@versione}): per mostrare i conteggi grezzi si passa {@code raw-sum@1}, per
+   * confrontare un metodo con un altro quello da provare.
+   */
+  public CalendarData calendar(CalendarQuery q, String methodId) throws SQLException {
     AreaResolver.Resolved area = resolver.resolve(q.area());
-    HarmonizationMethod method = registry.resolve(activeMethod());
+    HarmonizationMethod method = registry.resolve(methodId);
 
     Map<YearMonth, Map<Satellite, Integer>> raw = new LinkedHashMap<>();
     // per un'area libera i conteggi sono anche per blocco 2 gradi: un metodo regionale ha un k per blocco
@@ -127,9 +139,11 @@ public class CalendarService {
       rawFromCountry(area, q, raw);
     } else if (q.resolution() == Resolution.EXACT
         || (q.resolution() == Resolution.AUTO && area.boxAreaDegrees() <= EXACT_MAX_BOX_DEGREES2)) {
+      availability.require(area);
       resolution = "0.01";
       rawFromCellDay(area, q, rawByBlock);
     } else {
+      availability.require(area);
       resolution = "0.1";
       rawFromPyramid(area, q, rawByBlock);
     }

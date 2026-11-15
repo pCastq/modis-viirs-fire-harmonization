@@ -18,6 +18,7 @@ import org.firecal.domain.MonthAnomaly;
 import org.firecal.domain.MonthProfile;
 import org.firecal.domain.MonthlySeries;
 import org.firecal.domain.Trend;
+import org.firecal.domain.harmonization.RawSumMethod;
 import org.firecal.query.CalendarService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,7 +52,9 @@ public class CalendarController {
   private Prepared prepare(AreaRequest req) throws SQLException {
     DataInfoService.DataRange range = info.range();
     CalendarService.CalendarQuery q = mapper.query(req, range.first(), range.last());
-    return new Prepared(q, calendar.calendar(q));
+    // "Raw" mostra la somma dei conteggi senza correzioni (e le sue anomalie, il suo profilo, il suo trend): non i valori armonizzati
+    String method = mapper.mode(req.mode()) == RequestMapper.Mode.RAW ? RawSumMethod.REF.toString() : calendar.activeMethod();
+    return new Prepared(q, calendar.calendar(q, method));
   }
 
   @PostMapping("/calendar")

@@ -3,7 +3,7 @@ spring:
     name: firecal
   datasource:
     # Stesse variabili del docker-compose.yml; i valori predefiniti sono SOLO per lo sviluppo locale.
-    url: jdbc:postgresql://localhost:${FIRECAL_DB_PORT:5433}/${FIRECAL_DB_NAME:firecal}
+    url: jdbc:postgresql://${FIRECAL_DB_HOST:localhost}:${FIRECAL_DB_PORT:5433}/${FIRECAL_DB_NAME:firecal}
     username: ${FIRECAL_DB_USER:firecal}
     password: ${FIRECAL_DB_PASSWORD:firecal}
   flyway:

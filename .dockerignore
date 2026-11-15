@@ -1,0 +1,15 @@
+# Keep the build context small: only what the image build needs.
+.git
+.idea
+.claude
+.vscode
+*.iml
+target
+data
+analysis
+docs
+scripts
+**/node_modules
+frontend/dist
+**/__pycache__
+*.log

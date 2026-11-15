@@ -63,9 +63,14 @@ public class DetailService {
 
   private final DataSource dataSource;
   private final long maxExportRows;
+  private final DetailAvailability availability;
 
-  public DetailService(DataSource dataSource, @org.springframework.beans.factory.annotation.Value("${firecal.export.max-rows:1000000}") long maxExportRows) {
+  public DetailService(
+      DataSource dataSource,
+      DetailAvailability availability,
+      @org.springframework.beans.factory.annotation.Value("${firecal.export.max-rows:1000000}") long maxExportRows) {
     this.dataSource = dataSource;
+    this.availability = availability;
     this.maxExportRows = maxExportRows;
   }
 
@@ -127,6 +132,7 @@ public class DetailService {
 
   /** Celle-giorno attive per giorno e satellite in un mese solare, con gli stessi filtri del calendario. */
   public Map<LocalDate, Map<Satellite, Integer>> dailyCounts(AreaResolver.Resolved area, YearMonth month, Filters f) throws SQLException {
+    availability.require(area);
     AreaSql a = areaSql(area, "d");
     String sql =
         "SELECT d.solar_date AS day, d.satellite, count(*) AS n FROM cell_day d"
@@ -174,6 +180,7 @@ public class DetailService {
 
   /** Punti di un giorno SOLARE nell'area, al massimo {@code limit}; {@code truncated} dice se ce n'erano di piu'. */
   public HotspotsResult hotspots(AreaResolver.Resolved area, LocalDate solarDate, Filters f, int limit) throws SQLException {
+    availability.require(area);
     AreaSql a = areaSql(area, "r");
     String sql =
         "SELECT " + POINT_COLUMNS + " FROM hotspot_raw r"
@@ -255,6 +262,7 @@ public class DetailService {
    * un errore chiaro PRIMA di cominciare a scrivere, senza contare tutto.
    */
   public long countExportRows(AreaResolver.Resolved area, YearMonth from, YearMonth to, Filters f) throws SQLException {
+    availability.require(area);
     ExportQuery q = exportQuery(area, from, to, f, "1", " LIMIT " + (maxExportRows + 1));
     try (Connection c = dataSource.getConnection();
         PreparedStatement ps = c.prepareStatement("SELECT count(*) FROM (" + q.sql() + ") x")) {
@@ -275,6 +283,7 @@ public class DetailService {
 
   /** Scrive il CSV dei punti, in streaming, con un cursore sul database. */
   public long writeHotspotsCsv(AreaResolver.Resolved area, YearMonth from, YearMonth to, Filters f, OutputStream out) throws SQLException, IOException {
+    availability.require(area);
     String select =
         "r.acq_date, r.acq_time, r.solar_date, r.lat, r.lon, s.csv_label AS sat, s.sensor, r.conf_class, r.conf_raw,"
             + " r.daynight::text AS dn, r.type, r.frp, r.brightness, r.scan, r.track, r.bright2, pv.version,"
