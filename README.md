@@ -35,6 +35,7 @@ Measured on the real data (South America, 14 countries): without k the error is 
 It is **not** accurate at night (+12% bias: Terra and Aqua see less and less at night as their orbits drift), and k is **not transferable between countries**.
 S-NPP stopped delivering data on 2 November 2026; NOAA-20 and NOAA-21 take over with k = 1, so the calibration on 2012–2018 stays valid.
 Details, tables and limits: [docs/ARMONIZZAZIONE_PAESE_TRIMESTRE.md](docs/ARMONIZZAZIONE_PAESE_TRIMESTRE.md) (Italian).
+The numbers behind these claims, with the formulas (k, forecasts, errors per scheme and per country), are in [docs/harmonization-results.xlsx](docs/harmonization-results.xlsx).
 
 ## Quick start (demo data)
 
