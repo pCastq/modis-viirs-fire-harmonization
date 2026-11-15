@@ -398,6 +398,31 @@ fuori = falso.
 - [ ] La migrazione V1 usa `CREATE EXTENSION`: richiede un utente con il permesso di crearla. Nel container e'
       superutente; in un database gestito (cloud) l'estensione va abilitata a mano prima - Step 15
 
+### Step 17: livello grezzo del database (fatto)
+
+Migrazioni **V2** (`satellite`, `product_version`, `country`, `ingest_run`, `ingest_reject`) e **V3** (`hotspot_raw` partizionata
+per mese di `acq_date`, 326 partizioni da 2000-11 a 2027-12, funzione `ensure_hotspot_partition(date)`).
+Implementa le scelte P3, P4, P8, P10 di `ANALISI_DATI_REALI.md`: colonne compatte, niente geometria per riga, **niente chiave unica**
+(idempotenza per file e per partizione, deduplica nel caricamento), indice `(acq_date, cell_lat, cell_lon)`, `CHECK` sui valori.
+Verificato: 28 test di integrazione (`RawSchemaIT`), un solo PostGIS condiviso fra le classi di test.
+
+- Il dizionario `satellite` coincide con l'enum Java `Satellite` (id = posizione + 1, sensore, ruolo, nome nei CSV): un test lo verifica.
+  Se si cambia l'ordine dell'enum, il test fallisce.
+- `country` contiene i 14 paesi sudamericani e l'Italia (`in_scope`); gli altri paesi si aggiungono quando servono.
+- `ingest_run`: un file puo' risultare caricato (`OK`) una sola volta; i tentativi falliti non bloccano il riprovare.
+
+**Da verificare / rischi:**
+- [ ] **Nessuna chiave esterna** da `hotspot_raw` ai dizionari (costerebbero ad ogni riga): l'integrita' dipende dal caricamento, che deve
+      usare solo id presenti nei dizionari. Aggiungere un controllo di coerenza a fine caricamento (righe con id sconosciuti) - Step 17
+- [ ] **Duplicati ammessi dal grezzo** (un test lo documenta): se il caricamento ha un difetto, i duplicati entrano senza errore. Il
+      caricamento deve confrontare `righe_lette - righe_inserite - righe_scartate` con le righe duplicate attese (~230 su 548 M) - Step 17
+- [ ] 326 partizioni sono tante ma gestibili: misurare il tempo di pianificazione delle query che toccano molti mesi (calendario 2001-oggi
+      legge `cell_day`, non il grezzo, ma la ricostruzione tocca tutto) - Step 17
+- [ ] Il database parte da 29 MB vuoto (partizioni e indici): irrilevante, ma la dimensione cresce con i dati; ricontrollare dopo il
+      primo caricamento (stima fase 1: ~8-10 GB di grezzo) - Step 17
+- [ ] La data di fine di S-NPP (2026-11-02) nel dizionario viene dalla pagina di download FIRMS letta con un riassunto automatico:
+      confermare con `data_availability` quando avremo una MAP_KEY - Step 17
+
 ## 11. Analisi dei dati reali "full extraction" (2026-11-15)
 
 Analisi completa di 548 M righe (MODIS, S-NPP, NOAA-20; tutto il mondo, 2000-2025) e misure su PostGIS reale:
