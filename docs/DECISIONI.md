@@ -614,3 +614,35 @@ Realizza la proposta della sezione 17 (confermata dall'utente).
 3. Dati NRT 2026 e filtri diversi da "nominale+/vegetazione": k calcolato ma non validato per ogni combinazione.
 4. Aggiornare la calibrazione quando si aggiungono anni (la finestra e' fissa a 2013-2021 per scelta).
 5. Salto del 2018 in Italia: causa ancora ignota (vedi sezione 17).
+
+## 19. Scelta del k: paese x trimestre x giorno/notte (2026-11-15)
+
+Decisione dell'utente, dopo il confronto fra schemi su tutto il Sud America (conteggi grezzi di hotspot, calibrazione 2012-2018, prova
+2019-2024: k unico 12,5%, paese x giorno/notte 11,2%, paese x trimestre x giorno/notte 9,8% di errore paese per mese). Dettagli e misure con il
+codice vero: `docs/ARMONIZZAZIONE_PAESE_TRIMESTRE.md`.
+
+**Fatto**
+- `CountryMonthKMethod` diventa `CountryKMethod` con una `KResolution` (`QUARTER`, il metodo del progetto, o `MONTH`, tenuto per confronto): ids
+  `country-quarter-k@1` e `country-month-k@1`. `CalibrationTable` ricava trimestri e regione sommando i mesi, una volta sola, alla costruzione.
+- Calibrazione di default **2012-2018** (era 2013-2021), prova su 2019-2024 con `--firecal.calibrate.validate-only=true` (leave-one-year-out
+  **e** calibrazione-contro-periodo, per entrambe le risoluzioni, con l'errore per fascia di conteggio).
+- Bande di incertezza ricalcolate sull'errore fuori campione 2019-2024 (80% dei casi sotto: 58/50/36/27/19% dalle fasce piccole a quelle grandi).
+- Nuovo endpoint `GET /api/v1/harmonization?boundaryCode=...` e pannello della dashboard: i k usati per paese, trimestre e giorno/notte, con
+  le somme di celle-giorno da cui nascono e il livello da cui vengono (paese, regione, globale); disegno libero: spiegazione, nessun k unico.
+- L'ETag ora dipende anche dalla calibrazione (`calib_info.built_at`): prima una ricalibrazione con lo stesso metodo non invalidava le risposte in cache.
+- `MethodRegistry` e' una mappa di fabbriche (niente caso speciale); `SqlArrays.toLongs` sostituisce tre copie; proprieta' rinominate
+  `firecal.harmonization.country-k.*` (erano `country-month-k.*`).
+
+**Risultati che correggono quello che si pensava**
+- Con le celle-giorno dell'app, **trimestre e mese sono alla pari** (11,1% contro 10,9% ponderato, 2019-2024): il trimestre non e' piu' accurato, ma
+  e' piu' stabile dove i conteggi sono piccoli (fasce sotto 100 celle-giorno) e ha un terzo dei valori da gestire. Sui conteggi di hotspot lo
+  studio in Python dava 9,8% contro 10,0%: stessa conclusione.
+- **Di notte il metodo sovrastima**: distorsione +12% (2012-2018 contro 2019-2024) e +18% (2013-2021 contro 2022-2024), errore mediano 28%.
+  Terra e Aqua vedono sempre meno di notte rispetto agli anni di calibrazione.
+- Le bande precedenti (misurate dentro la finestra) erano troppo strette per l'uso reale (calibrare sul passato e usare sul futuro).
+
+**Da fare / aperto**
+1. Notte: una banda propria e/o una ricalibrazione frequente; valutare di calibrare su una finestra mobile degli ultimi anni.
+2. Bande delle aree disegnate (blocchi): non ricalcolate con questa prova.
+3. Italia (e altri continenti): la prova qui e' solo sul Sud America; il salto del 2018 in Italia resta senza causa.
+4. Una pagina "Metodo" per esteso nella dashboard (oggi: pannello dei k + note) e la scelta di mostrare anche il conteggio grezzo di hotspot.
