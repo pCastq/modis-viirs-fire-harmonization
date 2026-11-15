@@ -560,3 +560,57 @@ nel browser note e dettaglio passano da inglese a italiano e ritorno.
     risposte; da tradurre se la documentazione deve essere in inglese.
 12. I messaggi degli errori interni/di log restano in inglese (non vanno all'utente).
 13. I nomi dei paesi arrivano in inglese dal DB anche con `Accept-Language: it` (debito 9).
+
+## 17. Analisi di armonizzazione su tutti i sensori (2026-11-15)
+
+Documento completo: `docs/ANALISI_ARMONIZZAZIONE.md` (tabelle in `docs/analisi-armonizzazione/`, script in `analysis/`).
+Dati: Terra, Aqua, S-NPP, NOAA-20 e **NOAA-21** (scaricato oggi, `scripts/firms/download_noaa21.py`), Sud America (13 paesi) e Italia
+analizzati a parte, 54 milioni di celle-giorno.
+
+**Proposta (da confermare):**
+- VIIRS (S-NPP, NOAA-20, NOAA-21): **k = 1**, una sola famiglia (rapporti 1,00; errore mensile per paese ~5% = rumore).
+- Terra+Aqua -> equivalente VIIRS: **k per paese x mese x giorno/notte**, calibrato sul **2013-2021**: errore ~11% al mese e 4,5% all'anno in
+  Sud America (k globale 27%); per aree sotto il paese **k locale con shrinkage** (blocco 2 gradi: 27,7% -> 19,4%).
+- Scartati dopo la prova: k globale, soglia di FRP, legge di potenza (tutti peggiori).
+- Calibrazione solo su 2013-2021: Terra e Aqua derivano dal 2022; il 2012 e' incompleto.
+- Incertezza **per livello di conteggio** (7% sopra 1000 celle-giorno ... 24-28% sotto 100) piu' ~10% strutturale prima del 2012
+  (Aqua e Terra armonizzati disaccordano del 17% nel 2003-2011); Italia: banda doppia.
+
+**Scoperte che cambiano cose gia' scritte:** (1) la dipendenza di k dal volume e' reale solo di notte; il test ingenuo (raggruppare per Aqua)
+la gonfia (artefatto da diluizione); (2) la soglia dello shrinkage N0 = 200 della specifica non serve a livello di paese;
+(3) Terra di notte vede il doppio di Aqua; (4) in Italia k ha un salto dal 2018 (causa ignota).
+
+**Da verificare:** causa del salto 2018 in Italia; effetto dei giorni mancanti sui k; NRT 2026; filtri diversi da nominale+; un k per ogni
+combinazione di filtri.
+
+## 18. Implementato: metodo `country-month-k@1` e NOAA-21 (2026-11-15)
+
+Realizza la proposta della sezione 17 (confermata dall'utente).
+
+**Fatto**
+- **NOAA-21**: i file per rettangolo (API area) si caricano con `IngestService`: il paese di ogni punto viene dalla mappa cella 0,1 gradi -> paese
+  (`CellCountryMap`, dalla tabella `cell`); i punti fuori dal perimetro sono scartati e registrati in `ingest_reject`. Dev DB: 7.751.040 righe
+  inserite, 117.034 scartate; aggregati ricostruiti (+66.111 celle).
+- **Calibrazione** (V9, `HarmonizationCalibrator`): somme di celle-giorno VIIRS (S-NPP) contro Terra, Aqua e Terra+Aqua, per paese x mese
+  dell'anno x 27 filtri e per blocco 2 gradi x trimestre, sui soli mesi completi del 2013-2021 con i satelliti "inclusi" dalle regole di copertura.
+  Si conservano le somme, non i k. Comando: `--firecal.calibrate=true`.
+- **Metodo** (`CountryMonthKMethod`, dominio puro): VIIRS k = 1 (media, non somma); MODIS k per paese x mese (aree = paesi) o k locale del blocco tirato
+  verso il paese con peso `min(1, n/25)` (poligoni); se osservano sia VIIRS sia MODIS media pesata con peso 1/incertezza^2 (nessun satellite scartato);
+  fallback a strati piu' grossi; senza calibrazione k = 1 e incertezza 150%.
+- **Incertezza** per livello di conteggio (misurata fuori campione), +10% quadratico prima del 2012, Italia x2 (`firecal.harmonization.country-month-k.uncertainty-scale`).
+  Ora ogni mese del calendario la espone (`uncertainty`) e l'interfaccia la mostra nell'ispettore.
+- **Prova con il codice vero** (`--firecal.calibrate.validate-only=true`, leave-one-year-out 2013-2021, Terra+Aqua -> S-NPP, paese x mese):
+  filtro qualsiasi 11,8% mediano / 7,3% ponderato / distorsione 0,3%; giorno 11,9% / 8,3%; notte 24,3% / 11,1%. **Coincide con lo studio in Python** (11,8% / 7,5%).
+- Metodo attivo sul database di sviluppo: `country-month-k@1`. Tempi: calendario di un paese ~40-70 ms, poligono piccolo ~70 ms.
+
+**Scelte e conseguenze**
+- Il k si calibra **per ogni filtro** (anche "qualsiasi ora") con i suoi dati, invece di sommare k di giorno e di notte: provato, errore equivalente.
+- `aggregation` non dipende da `query` (regola ArchUnit senza cicli): il comando di calibrazione non ricarica la cache; il servizio API la rilegge al riavvio o con `reload()`.
+- Dopo una nuova calibrazione, rilanciare l'API (o chiamare `CalibrationService.reload()`).
+
+**Da fare / aperto**
+1. Notte: errore mediano 24% (conteggi piccoli): la banda dichiarata per i mesi notturni e' quella generale; valutare una banda per filtro.
+2. Banda dei poligoni: media pesata dei blocchi (cautelativa), non validata a parte.
+3. Dati NRT 2026 e filtri diversi da "nominale+/vegetazione": k calcolato ma non validato per ogni combinazione.
+4. Aggiornare la calibrazione quando si aggiungono anni (la finestra e' fissa a 2013-2021 per scelta).
+5. Salto del 2018 in Italia: causa ancora ignota (vedi sezione 17).
