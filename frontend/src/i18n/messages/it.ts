@@ -125,6 +125,7 @@ export const it: EnglishMessages = {
       hint: 'Passa sopra un mese per vederne i dettagli; clicca per aprire i giorni.',
       hotspotsIn: '{value} hotspot ({mode})',
       versusTypical: '{change} rispetto al mese tipico',
+      uncertainty: '±{value} (errore sotto questo valore 8 volte su 10)',
       incomplete: 'Incompleto: non confrontabile',
       provisional: 'Provvisorio',
     },

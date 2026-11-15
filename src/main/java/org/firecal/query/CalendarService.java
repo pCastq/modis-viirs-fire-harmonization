@@ -119,6 +119,8 @@ public class CalendarService {
     HarmonizationMethod method = registry.resolve(activeMethod());
 
     Map<YearMonth, Map<Satellite, Integer>> raw = new LinkedHashMap<>();
+    // per un'area libera i conteggi sono anche per blocco 2 gradi: un metodo regionale ha un k per blocco
+    Map<YearMonth, Map<BlockKey, Map<Satellite, Integer>>> rawByBlock = new LinkedHashMap<>();
     String resolution;
     if (area.kind() == AreaResolver.Kind.COUNTRY) {
       resolution = "paese";
@@ -126,10 +128,13 @@ public class CalendarService {
     } else if (q.resolution() == Resolution.EXACT
         || (q.resolution() == Resolution.AUTO && area.boxAreaDegrees() <= EXACT_MAX_BOX_DEGREES2)) {
       resolution = "0.01";
-      rawFromCellDay(area, q, raw);
+      rawFromCellDay(area, q, rawByBlock);
     } else {
       resolution = "0.1";
-      rawFromPyramid(area, q, raw);
+      rawFromPyramid(area, q, rawByBlock);
+    }
+    if (area.kind() != AreaResolver.Kind.COUNTRY) {
+      sumBlocks(rawByBlock, raw);
     }
 
     Map<YearMonth, CoverageService.MonthCoverage> allCoverage = coverageService.monthCoverage();
@@ -143,7 +148,7 @@ public class CalendarService {
         continue; // nessun satellite aveva giorni in questo mese: nessun dato
       }
       coverage.put(month, cov);
-      List<Satellite> included = includedSatellites(cov);
+      List<Satellite> included = cov.includedSatellites();
       if (included.isEmpty()) {
         continue;
       }
@@ -152,9 +157,10 @@ public class CalendarService {
       for (Satellite s : included) {
         counts = counts.with(s, monthRaw.getOrDefault(s, 0));
       }
-      CellMonthContext context =
-          new CellMonthContext(new CellId(area.centerCellLat(), area.centerCellLon()), month, q.dayNight(), q.minConfidence());
-      Optional<HarmonizedValue> value = method.harmonize(context, counts);
+      Optional<HarmonizedValue> value =
+          area.kind() == AreaResolver.Kind.COUNTRY
+              ? method.harmonize(countryContext(area, month, q), counts)
+              : harmonizeBlocks(method, q, month, included, rawByBlock.getOrDefault(month, Map.of()));
       if (value.isPresent()) {
         HarmonizedValue v = value.get();
         // provvisorio: il grezzo caricato e' tutto standard (SP); i dati NRT, quando ci saranno, andranno marcati
@@ -165,12 +171,83 @@ public class CalendarService {
     return new CalendarData(area, resolution, method.ref(), raw, coverage, harmonized, used);
   }
 
+  /** Blocco di 2 x 2 gradi (floor(cella / 200)): il livello a cui un metodo regionale ha un k proprio. */
+  record BlockKey(int blat, int blon) {}
+
+  private static CellMonthContext countryContext(AreaResolver.Resolved area, YearMonth month, CalendarQuery q) {
+    return new CellMonthContext(
+        new CellId(area.centerCellLat(), area.centerCellLon()), month, q.dayNight(), q.minConfidence(), q.sourceType(), area.code());
+  }
+
+  /**
+   * Un'area libera si armonizza un blocco alla volta (ognuno col suo k) e si somma. L'incertezza e' la media pesata
+   * dei blocchi, cioe' si suppone che gli errori dei blocchi siano concordi: prudente.
+   */
+  private static Optional<HarmonizedValue> harmonizeBlocks(
+      HarmonizationMethod method, CalendarQuery q, YearMonth month, List<Satellite> included, Map<BlockKey, Map<Satellite, Integer>> blocks) {
+    double total = 0;
+    double weightedUncertainty = 0;
+    Set<Satellite> used = new java.util.TreeSet<>();
+    MethodRef ref = method.ref();
+    boolean any = false;
+    boolean uncertaintyKnown = true;
+    for (Map.Entry<BlockKey, Map<Satellite, Integer>> block : blocks.entrySet()) {
+      SatelliteCounts counts = SatelliteCounts.none();
+      for (Satellite s : included) {
+        counts = counts.with(s, block.getValue().getOrDefault(s, 0));
+      }
+      // il centro del blocco: il metodo ne ricava il blocco (floor(cella / 200))
+      CellId center = new CellId(block.getKey().blat() * 200 + 100, block.getKey().blon() * 200 + 100);
+      CellMonthContext context = new CellMonthContext(center, month, q.dayNight(), q.minConfidence(), q.sourceType(), null);
+      Optional<HarmonizedValue> v = method.harmonize(context, counts);
+      if (v.isEmpty()) {
+        continue;
+      }
+      any = true;
+      total += v.get().value();
+      used.addAll(v.get().usedSatellites());
+      if (v.get().relativeUncertainty().isPresent()) {
+        weightedUncertainty += v.get().value() * v.get().relativeUncertainty().getAsDouble();
+      } else {
+        uncertaintyKnown = false;
+      }
+    }
+    if (!any) {
+      // nessuna cella attiva nell'area in quel mese: i satelliti hanno osservato e non hanno visto fuochi
+      SatelliteCounts zeros = SatelliteCounts.none();
+      for (Satellite s : included) {
+        zeros = zeros.with(s, 0);
+      }
+      return method.harmonize(new CellMonthContext(new CellId(0, 0), month, q.dayNight(), q.minConfidence(), q.sourceType(), null), zeros);
+    }
+    return Optional.of(new HarmonizedValue(
+        total,
+        uncertaintyKnown && total > 0 ? OptionalDouble.of(weightedUncertainty / total) : OptionalDouble.empty(),
+        used.isEmpty() ? Set.copyOf(included) : used,
+        ref));
+  }
+
+  private static void sumBlocks(Map<YearMonth, Map<BlockKey, Map<Satellite, Integer>>> byBlock, Map<YearMonth, Map<Satellite, Integer>> raw) {
+    byBlock.forEach((month, blocks) -> {
+      Map<Satellite, Integer> sum = raw.computeIfAbsent(month, k -> new EnumMap<>(Satellite.class));
+      blocks.values().forEach(counts -> counts.forEach((s, n) -> sum.merge(s, n, Integer::sum)));
+    });
+  }
+
   // ---- i tre percorsi di lettura ----
 
   private static void accept(Map<YearMonth, Map<Satellite, Integer>> raw, java.sql.ResultSet rs) throws SQLException {
     YearMonth month = YearMonth.from(rs.getDate("m").toLocalDate());
     Satellite satellite = Satellite.values()[rs.getInt("satellite") - 1];
     raw.computeIfAbsent(month, k -> new EnumMap<>(Satellite.class)).put(satellite, rs.getInt("n"));
+  }
+
+  private static void acceptBlock(Map<YearMonth, Map<BlockKey, Map<Satellite, Integer>>> raw, java.sql.ResultSet rs) throws SQLException {
+    YearMonth month = YearMonth.from(rs.getDate("m").toLocalDate());
+    Satellite satellite = Satellite.values()[rs.getInt("satellite") - 1];
+    raw.computeIfAbsent(month, k -> new LinkedHashMap<>())
+        .computeIfAbsent(new BlockKey(rs.getInt("blat"), rs.getInt("blon")), k -> new EnumMap<>(Satellite.class))
+        .put(satellite, rs.getInt("n"));
   }
 
   private void rawFromCountry(AreaResolver.Resolved area, CalendarQuery q, Map<YearMonth, Map<Satellite, Integer>> raw) {
@@ -186,17 +263,18 @@ public class CalendarService {
         Date.valueOf(q.to().plusMonths(1).atDay(1)));
   }
 
-  private void rawFromCellDay(AreaResolver.Resolved area, CalendarQuery q, Map<YearMonth, Map<Satellite, Integer>> raw) {
+  private void rawFromCellDay(AreaResolver.Resolved area, CalendarQuery q, Map<YearMonth, Map<BlockKey, Map<Satellite, Integer>>> raw) {
     int mask = CellDayFlags.mask(q.sourceType(), q.dayNight(), q.minConfidence());
     jdbc.query(
-        "SELECT date_trunc('month', d.solar_date)::date AS m, d.satellite, count(*) AS n"
+        "SELECT date_trunc('month', d.solar_date)::date AS m, floor(d.cell_lat / 200.0)::int AS blat,"
+            + " floor(d.cell_lon / 200.0)::int AS blon, d.satellite, count(*) AS n"
             + " FROM cell_day d JOIN cell c ON c.cell_lat = d.cell_lat AND c.cell_lon = d.cell_lon"
             + " WHERE d.cell_lat BETWEEN ? AND ? AND d.cell_lon BETWEEN ? AND ?"
             + " AND ST_Contains(ST_SetSRID(ST_GeomFromGeoJSON(?), 4326), c.geom)"
             + " AND d.solar_date >= ? AND d.solar_date < ? AND (d.flags & ?) <> 0"
-            + " GROUP BY 1, 2 ORDER BY 1, 2",
+            + " GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4",
         rs -> {
-          accept(raw, rs);
+          acceptBlock(raw, rs);
         },
         (int) Math.floor(area.south() * 100) - 1,
         (int) Math.ceil(area.north() * 100) + 1,
@@ -208,36 +286,21 @@ public class CalendarService {
         mask);
   }
 
-  private void rawFromPyramid(AreaResolver.Resolved area, CalendarQuery q, Map<YearMonth, Map<Satellite, Integer>> raw) {
+  private void rawFromPyramid(AreaResolver.Resolved area, CalendarQuery q, Map<YearMonth, Map<BlockKey, Map<Satellite, Integer>>> raw) {
     int counter = CellDayFlags.counterIndex(q.sourceType(), q.dayNight(), q.minConfidence()) + 1;
     jdbc.query(
-        "SELECT p.month AS m, p.satellite, sum(p.counts[" + counter + "])::int AS n"
+        "SELECT p.month AS m, floor(k.cell_lat10 / 20.0)::int AS blat, floor(k.cell_lon10 / 20.0)::int AS blon,"
+            + " p.satellite, sum(p.counts[" + counter + "])::int AS n"
             + " FROM cell10 k JOIN cell_month_01 p ON p.cell_lat10 = k.cell_lat10 AND p.cell_lon10 = k.cell_lon10"
             + " WHERE ST_Contains(ST_SetSRID(ST_GeomFromGeoJSON(?), 4326), k.geom)"
             + " AND p.month >= ? AND p.month < ?"
-            + " GROUP BY 1, 2 ORDER BY 1, 2",
+            + " GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4",
         rs -> {
-          accept(raw, rs);
+          acceptBlock(raw, rs);
         },
         area.geoJson(),
         Date.valueOf(q.from().atDay(1)),
         Date.valueOf(q.to().plusMonths(1).atDay(1)));
-  }
-
-  /** Satelliti con almeno l'80% dei giorni OK; in mancanza, quelli con almeno un giorno OK. */
-  static List<Satellite> includedSatellites(CoverageService.MonthCoverage cov) {
-    double needed = Math.ceil(ObservationCoverage.COMPLETE_FROM * cov.daysInMonth() - 1e-9);
-    List<Satellite> full = new ArrayList<>();
-    List<Satellite> some = new ArrayList<>();
-    for (Map.Entry<Satellite, Integer> e : cov.okDays().entrySet()) {
-      if (e.getValue() >= needed) {
-        full.add(e.getKey());
-      }
-      if (e.getValue() > 0) {
-        some.add(e.getKey());
-      }
-    }
-    return full.isEmpty() ? some : full;
   }
 
   /** La serie mensile armonizzata del periodo, per anomalia, profilo stagionale e trend. */

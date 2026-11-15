@@ -55,6 +55,7 @@ export const calendar: CalendarResponse = {
   values: [[1200, null, 300]],
   provisional: falses,
   incomplete: [[false, false, true]],
+  uncertainty: [[0.14, null, 0.3]],
   bySatellite: { SNPP: [[1000, null, 250]], AQUA: [[200, null, 50]] },
   typicalUncertainty: 0.35,
   notes: ['Metodo di armonizzazione PROVVISORIO'],

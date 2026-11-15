@@ -20,6 +20,7 @@ public final class ApiDtos {
    * @param values valore armonizzato per anno e mese; {@code null} = nessun dato (non zero)
    * @param provisional mese con dati provvisori (NRT)
    * @param incomplete mese con giorni mancanti: non confrontabile, escluso dalla mediana
+   * @param uncertainty incertezza relativa del valore di ogni mese (0,14 = errore sotto il 14% in 8 casi su 10); {@code null} se non nota
    * @param bySatellite conteggi grezzi per satellite (modalita' RAW); {@code null} = non osservato
    * @param typicalUncertainty incertezza relativa tipica del metodo (0,35 = +/-35%), se nota
    * @param notes avvertenze da mostrare all'utente (metodo provvisorio, risoluzione, filtro)
@@ -37,6 +38,7 @@ public final class ApiDtos {
       List<List<Double>> values,
       List<List<Boolean>> provisional,
       List<List<Boolean>> incomplete,
+      List<List<Double>> uncertainty,
       Map<String, List<List<Integer>>> bySatellite,
       Double typicalUncertainty,
       List<String> notes) {}

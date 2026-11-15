@@ -125,6 +125,7 @@ export const en = {
       hint: 'Hover a month for details; click to open its days.',
       hotspotsIn: '{value} hotspots ({mode})',
       versusTypical: '{change} compared with the typical month',
+      uncertainty: '±{value} (error below this in 8 cases out of 10)',
       incomplete: 'Incomplete: not comparable',
       provisional: 'Provisional',
     },

@@ -58,6 +58,20 @@ public class IngestService {
   private static final Pattern FILE_NAME =
       Pattern.compile("^(modis|viirs-[a-z0-9]+)_(\\d{4})_(.+)\\.csv$");
 
+  /**
+   * File per rettangolo (API area di FIRMS): {@code <sorgente>_<area>_<dal>_<al>.csv}, per esempio
+   * {@code viirs-noaa21-sp_sud-america_2023-03-01_2023-03-05.csv}. Non hanno il paese: si ricava dalla cella.
+   */
+  private static final Pattern AREA_FILE_NAME =
+      Pattern.compile("^(viirs-[a-z0-9]+-[a-z]+)_([a-z0-9-]+)_(\\d{4})-\\d{2}-\\d{2}_(\\d{4})-\\d{2}-\\d{2}\\.csv$");
+
+  /** Il paese di ogni riga: costante per un file per paese, dalla cella per un file per rettangolo. */
+  @FunctionalInterface
+  private interface CountryResolver {
+    /** Id del paese, o {@link CellCountryMap#OUTSIDE} se la riga e' fuori dal perimetro. */
+    int resolve(ParsedRow row);
+  }
+
   private static final int COPY_FLUSH_CHARS = 1 << 20;
   private static final int MAX_STORED_REJECTS = 1000;
   private static final int MAX_REJECT_LINE = 500;
@@ -83,6 +97,7 @@ public class IngestService {
   private final DataSource dataSource;
   private final Map<String, Integer> versionIds = new ConcurrentHashMap<>();
   private final Map<String, Integer> countryIds = new ConcurrentHashMap<>();
+  private volatile CellCountryMap cellCountries;
 
   public IngestService(DataSource dataSource) {
     this.dataSource = dataSource;
@@ -93,27 +108,52 @@ public class IngestService {
   public Result ingestFile(Path root, Path file) {
     String relative = root.relativize(file).toString().replace('\\', '/');
     Matcher m = FILE_NAME.matcher(file.getFileName().toString());
-    if (!m.matches()) {
-      return failed(relative, "nome file non riconosciuto (atteso <sorgente>_<anno>_<Paese>.csv)");
+    Matcher area = AREA_FILE_NAME.matcher(file.getFileName().toString());
+    boolean byArea = !m.matches() && area.matches();
+    if (!m.matches() && !byArea) {
+      return failed(relative, "nome file non riconosciuto (atteso <sorgente>_<anno>_<Paese>.csv oppure <sorgente>_<area>_<dal>_<al>.csv)");
     }
-    String source = m.group(1);
-    int year = Integer.parseInt(m.group(2));
-    String country = m.group(3);
+    String source = byArea ? area.group(1) : m.group(1);
+    int year = Integer.parseInt(byArea ? area.group(3) : m.group(2));
+    int lastYear = byArea ? Integer.parseInt(area.group(4)) : year;
     try {
       Result existing = checkAlreadyLoaded(relative, file);
       if (existing != null) {
         return existing;
       }
-      int countryId = countryId(country);
+      Integer countryId = byArea ? null : countryId(m.group(3));
+      CountryResolver resolver;
+      if (byArea) {
+        CellCountryMap map = cellCountries();
+        if (map.size() == 0) {
+          return failed(relative, "serve la tabella cell: carica i file per paese e ricostruisci le celle (firecal.rebuild.all) prima dei file per rettangolo");
+        }
+        resolver = row -> map.countryOf(row.hotspot().cell().latCell(), row.hotspot().cell().lonCell());
+      } else {
+        int id = countryId;
+        resolver = row -> id;
+      }
       long runId = startRun(relative, source, year, countryId);
-      return load(file, relative, runId, countryId, year);
+      return load(file, relative, runId, resolver, year, lastYear);
     } catch (SQLException | IOException e) {
       log.error("Errore su {}: {}", relative, e.toString());
       return failed(relative, e.toString());
     }
   }
 
-  private Result load(Path file, String relative, long runId, int countryId, int year) {
+  /**
+   * La mappa cella 0,1 -> paese. Dentro {@link #ingestAll} e' letta una volta sola (i file per rettangolo si caricano in
+   * parallelo e le celle non cambiano nel frattempo); per un file singolo si rilegge, cosi' non resta mai vecchia.
+   */
+  private CellCountryMap cellCountries() throws SQLException {
+    CellCountryMap shared = cellCountries;
+    if (shared != null) {
+      return shared;
+    }
+    return CellCountryMap.load(dataSource);
+  }
+
+  private Result load(Path file, String relative, long runId, CountryResolver countries, int year, int lastYear) {
     long read = 0;
     long inserted = 0;
     long rejected = 0;
@@ -124,6 +164,9 @@ public class IngestService {
       try {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         ensurePartitions(c, year);
+        if (lastYear != year) {
+          ensurePartitions(c, lastYear);
+        }
         CopyIn copy = c.unwrap(PGConnection.class).getCopyAPI().copyIn(CopyRowFormatter.COPY_SQL);
         boolean done = false;
         try (BufferedReader reader =
@@ -147,6 +190,10 @@ public class IngestService {
             read++;
             try {
               ParsedRow row = parser.parse(line);
+              int countryId = countries.resolve(row);
+              if (countryId == CellCountryMap.OUTSIDE) {
+                throw new RowRejectedException("cella fuori dal perimetro (nessun paese caricato)");
+              }
               if (!seen.add(row.hotspot())) {
                 duplicate++;
                 continue;
@@ -205,11 +252,21 @@ public class IngestService {
       Path root, boolean inScopeOnly, Set<String> sources, Set<Integer> years, int threads)
       throws IOException, SQLException {
     Set<String> allowedCountries = inScopeOnly ? inScopeCountries() : null;
+    cellCountries = CellCountryMap.load(dataSource);
+    log.info("Mappa cella 0,1 gradi -> paese: {} celle", cellCountries.size());
     List<Path> files = new ArrayList<>();
     try (Stream<Path> walk = Files.walk(root, 3)) {
       walk.filter(Files::isRegularFile)
           .forEach(
               p -> {
+                Matcher area = AREA_FILE_NAME.matcher(p.getFileName().toString());
+                if (area.matches()) {
+                  if ((sources.isEmpty() || sources.contains(area.group(1)))
+                      && (years.isEmpty() || years.contains(Integer.parseInt(area.group(3))))) {
+                    files.add(p);
+                  }
+                  return;
+                }
                 Matcher m = FILE_NAME.matcher(p.getFileName().toString());
                 if (!m.matches()) {
                   return;
@@ -250,6 +307,7 @@ public class IngestService {
       throw new IOException("Caricamento interrotto", e);
     } finally {
       pool.shutdown();
+      cellCountries = null;
     }
     return results;
   }
@@ -286,7 +344,7 @@ public class IngestService {
     return failed(relative, "il contenuto e' cambiato rispetto al file gia' caricato: serve una sostituzione esplicita");
   }
 
-  private long startRun(String relative, String source, int year, int countryId) throws SQLException {
+  private long startRun(String relative, String source, int year, Integer countryId) throws SQLException {
     try (Connection c = dataSource.getConnection();
         PreparedStatement ps =
             c.prepareStatement(
@@ -294,7 +352,11 @@ public class IngestService {
                     + " VALUES (?, ?, 'in corso', ?, ?, 'RUNNING') RETURNING id")) {
       ps.setString(1, source);
       ps.setString(2, relative);
-      ps.setInt(3, countryId);
+      if (countryId == null) {
+        ps.setNull(3, java.sql.Types.SMALLINT);
+      } else {
+        ps.setInt(3, countryId);
+      }
       ps.setInt(4, year);
       try (ResultSet rs = ps.executeQuery()) {
         rs.next();

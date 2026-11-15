@@ -47,6 +47,8 @@ public class PayloadBuilder {
     String method = data.method().toString();
     if (data.method().id().equals("fixed-factor")) {
       notes.add(messages.text("note.methodProvisional", method));
+    } else if (data.method().id().equals("country-month-k")) {
+      notes.add(messages.text("note.methodCountryMonthK", method));
     } else if (data.method().id().equals("raw-sum")) {
       notes.add(messages.text("note.methodRaw", method));
     }
@@ -79,19 +81,23 @@ public class PayloadBuilder {
     List<List<Double>> values = new ArrayList<>();
     List<List<Boolean>> provisional = new ArrayList<>();
     List<List<Boolean>> incomplete = new ArrayList<>();
+    List<List<Double>> monthUncertainty = new ArrayList<>();
     for (int y : years) {
       List<Double> vRow = new ArrayList<>();
       List<Boolean> pRow = new ArrayList<>();
       List<Boolean> iRow = new ArrayList<>();
+      List<Double> uRow = new ArrayList<>();
       for (int m = 1; m <= 12; m++) {
         MonthlyValue v = inRange(q, YearMonth.of(y, m)) ? data.harmonized().get(YearMonth.of(y, m)) : null;
         vRow.add(v == null ? null : v.value());
         pRow.add(v != null && v.provisional());
         iRow.add(v != null && v.incomplete());
+        uRow.add(v != null && v.relativeUncertainty().isPresent() ? v.relativeUncertainty().getAsDouble() : null);
       }
       values.add(vRow);
       provisional.add(pRow);
       incomplete.add(iRow);
+      monthUncertainty.add(uRow);
     }
 
     Set<Satellite> seen = new TreeSet<>();
@@ -128,6 +134,7 @@ public class PayloadBuilder {
         values,
         provisional,
         incomplete,
+        monthUncertainty,
         bySatellite,
         uncertainty,
         notes(data, q.sourceType()));

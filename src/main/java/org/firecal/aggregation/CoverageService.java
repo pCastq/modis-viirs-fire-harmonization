@@ -38,7 +38,27 @@ public class CoverageService {
   private static final Logger log = LoggerFactory.getLogger(CoverageService.class);
 
   /** Copertura di un mese: giorni OK per satellite e se il mese e' completo. */
-  public record MonthCoverage(YearMonth month, int daysInMonth, Map<Satellite, Integer> okDays, boolean complete) {}
+  public record MonthCoverage(YearMonth month, int daysInMonth, Map<Satellite, Integer> okDays, boolean complete) {
+
+    /**
+     * I satelliti che entrano in un mese: quelli con almeno l'80% dei giorni OK; in mancanza, quelli con almeno un giorno OK.
+     * Un satellite a meta' trasmissione (S-NPP ad agosto 2022) abbasserebbe la media.
+     */
+    public java.util.List<Satellite> includedSatellites() {
+      double needed = Math.ceil(org.firecal.domain.ObservationCoverage.COMPLETE_FROM * daysInMonth - 1e-9);
+      java.util.List<Satellite> full = new java.util.ArrayList<>();
+      java.util.List<Satellite> some = new java.util.ArrayList<>();
+      for (Map.Entry<Satellite, Integer> e : okDays.entrySet()) {
+        if (e.getValue() >= needed) {
+          full.add(e.getKey());
+        }
+        if (e.getValue() > 0) {
+          some.add(e.getKey());
+        }
+      }
+      return full.isEmpty() ? some : full;
+    }
+  }
 
   private final DataSource dataSource;
 

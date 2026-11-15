@@ -10,3 +10,9 @@ target/
 
 # Dati FIRMS scaricati a mano: grandi e riproducibili, non vanno nel repository
 data/
+
+# Python
+__pycache__/
+
+# Copia duplicata di docs/analisi-armonizzazione
+analysis/out/

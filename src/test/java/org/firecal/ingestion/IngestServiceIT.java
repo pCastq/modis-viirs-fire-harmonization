@@ -30,11 +30,13 @@ class IngestServiceIT {
 
   @Autowired IngestService service;
   @Autowired JdbcTemplate jdbc;
+  @Autowired org.firecal.aggregation.CellBuilder cellBuilder;
 
   @BeforeEach
   @AfterEach
   void cleanUp() {
     jdbc.execute("TRUNCATE hotspot_raw");
+    jdbc.execute("TRUNCATE cell");
     jdbc.execute("DELETE FROM ingest_run"); // elimina anche ingest_reject (ON DELETE CASCADE)
     jdbc.execute("DELETE FROM country WHERE name = 'Nowhere'");
   }
@@ -45,6 +47,12 @@ class IngestServiceIT {
 
   private IngestService.Result ingest(String relative) throws URISyntaxException {
     Path root = fixtures();
+    return service.ingestFile(root, root.resolve(relative));
+  }
+
+  /** I file per rettangolo stanno in una radice a parte: non devono finire nei test che caricano tutto `/ingest`. */
+  private IngestService.Result ingestArea(String relative) throws URISyntaxException {
+    Path root = Path.of(getClass().getResource("/ingest-area").toURI());
     return service.ingestFile(root, root.resolve(relative));
   }
 
@@ -277,5 +285,33 @@ class IngestServiceIT {
         }
       }
     }
+  }
+
+  // ---- file per rettangolo (API area): il paese viene dalla cella ----
+
+  @Test
+  void anAreaFileGetsItsCountryFromTheCellAndRejectsPointsOutsideThePerimeter() throws Exception {
+    ingest("viirs-snpp/2019/viirs-snpp_2019_Italy.csv"); // i file per paese insegnano quali celle sono italiane
+    cellBuilder.addAllCells();
+    IngestService.Result r = ingestArea("viirs-noaa21-sp/italia/viirs-noaa21-sp_italia_2019-08-28_2019-08-30.csv");
+
+    assertThat(r.status()).isEqualTo(IngestService.Status.LOADED);
+    assertThat(r.rowsRead()).isEqualTo(4);
+    assertThat(r.rowsInserted()).isEqualTo(2);
+    assertThat(r.rowsRejected()).isEqualTo(2); // le Alpi svizzere e il mare davanti all'Africa
+    assertThat(r.rowsRead()).isEqualTo(r.rowsInserted() + r.rowsDuplicate() + r.rowsRejected());
+    assertThat(count("SELECT count(*) FROM hotspot_raw WHERE satellite = 5")).isEqualTo(2);
+    assertThat(count("SELECT count(*) FROM hotspot_raw h JOIN country c ON c.id = h.src_country WHERE satellite = 5 AND c.name = 'Italy'"))
+        .isEqualTo(2);
+    assertThat(jdbc.queryForObject("SELECT country_id IS NULL FROM ingest_run WHERE file_path LIKE 'viirs-noaa21%'", Boolean.class)).isTrue();
+    assertThat(count("SELECT count(*) FROM ingest_reject WHERE reason LIKE '%fuori dal perimetro%'")).isEqualTo(2);
+  }
+
+  @Test
+  void anAreaFileWithoutKnownCellsIsRefusedWithAClearMessage() throws Exception {
+    IngestService.Result r = ingestArea("viirs-noaa21-sp/italia/viirs-noaa21-sp_italia_2019-08-28_2019-08-30.csv");
+    assertThat(r.status()).isEqualTo(IngestService.Status.FAILED);
+    assertThat(r.message()).contains("serve la tabella cell");
+    assertThat(count("SELECT count(*) FROM hotspot_raw")).isZero();
   }
 }

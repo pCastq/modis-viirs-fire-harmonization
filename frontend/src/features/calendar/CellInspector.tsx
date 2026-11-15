@@ -37,6 +37,11 @@ export function CellInspector({ cell, bySatellite, modeLabel }: Props) {
           <span className={styles.muted}>(×{fmt.decimal(cell.ratio)})</span>
         </span>
       ) : null}
+      {cell.uncertainty !== null ? (
+        <span className={styles.muted}>
+          {t('calendar.inspector.uncertainty', { value: fmt.percent(cell.uncertainty) })}
+        </span>
+      ) : null}
       {cell.incomplete ? (
         <span className={styles.flag}>{t('calendar.inspector.incomplete')}</span>
       ) : null}

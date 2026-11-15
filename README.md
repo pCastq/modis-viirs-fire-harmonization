@@ -64,6 +64,22 @@ Endpoint principali (tutti sotto `/api/v1`): `POST calendar`, `anomaly`, `season
 Esempio: `curl -H "Content-Type: application/json" -d '{"boundaryCode":"Italy"}' localhost:8080/api/v1/calendar`
 Il metodo di armonizzazione attivo e' in `app_setting.active_method` (oggi `fixed-factor@1`, provvisorio).
 
+## Armonizzazione (metodo `country-month-k@1`)
+
+Dopo il caricamento (`firecal.ingest.root`) e la ricostruzione (`firecal.rebuild.all=true`), si calibra e si attiva il metodo:
+
+```bash
+# file per rettangolo (NOAA-21 da FIRMS, scaricati con scripts/firms/download_noaa21.py): il paese viene dalla cella
+java -jar target/fire-calendar-0.1.0-SNAPSHOT.jar --spring.main.web-application-type=none   --firecal.ingest.root="<cartella>/full extraction" --firecal.ingest.sources=viirs-noaa21-sp
+java -jar target/fire-calendar-0.1.0-SNAPSHOT.jar --spring.main.web-application-type=none --firecal.rebuild.from=2023-03 --firecal.rebuild.to=2025-12
+# calibrazione sul 2013-2021 (somme per paese x mese x filtro e per blocco 2 gradi) e attivazione del metodo
+java -jar target/fire-calendar-0.1.0-SNAPSHOT.jar --spring.main.web-application-type=none --firecal.calibrate=true
+# prova leave-one-year-out con il codice vero (non scrive nulla)
+java -jar target/fire-calendar-0.1.0-SNAPSHOT.jar --spring.main.web-application-type=none --firecal.calibrate=true --firecal.calibrate.validate-only=true
+```
+
+Il metodo, la sua misura e i limiti sono in `docs/ANALISI_ARMONIZZAZIONE.md`; la sua incertezza per livello di conteggio e' in ogni mese del calendario (`uncertainty`).
+
 ## Lingue dell'API
 
 Note, errori e motivi (`notes`, `title`/`detail` dei Problem Details, `reason` dell'anomalia) escono nella lingua di

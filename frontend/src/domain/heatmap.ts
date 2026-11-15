@@ -7,6 +7,8 @@ export interface HeatCell {
   value: number | null;
   provisional: boolean;
   incomplete: boolean;
+  /** Errore relativo atteso del valore (8 casi su 10), `null` se non noto. */
+  uncertainty: number | null;
   /** Rapporto con la mediana tipica dello stesso mese, `null` se non calcolabile. */
   ratio: number | null;
 }
@@ -49,6 +51,7 @@ export function buildCells(calendar: CalendarResponse): HeatCell[][] {
         value,
         provisional: calendar.provisional[y]?.[m] ?? false,
         incomplete: calendar.incomplete[y]?.[m] ?? false,
+        uncertainty: calendar.uncertainty?.[y]?.[m] ?? null,
         ratio: value != null && reference != null && reference > 0 ? value / reference : null,
       };
     }),

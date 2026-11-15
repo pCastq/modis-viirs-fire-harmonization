@@ -63,6 +63,8 @@ export interface CalendarResponse {
   values: (number | null)[][];
   provisional: boolean[][];
   incomplete: boolean[][];
+  /** Errore relativo atteso di ogni mese (0,14 = sotto il 14% in 8 casi su 10); `null` se non noto. */
+  uncertainty: (number | null)[][];
   bySatellite: Partial<Record<SatelliteCode, (number | null)[][]>>;
   typicalUncertainty: number | null;
   notes: string[];
